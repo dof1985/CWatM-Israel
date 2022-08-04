@@ -634,6 +634,7 @@ class water_demand:
             
             # for wastewater package
             self.var.leakage_wwtC_daily = np.compress(self.var.compress_LR, globals.inZero.copy())
+            self.var.act_bigLakeResAbst_wwt = globals.inZero.copy()
             
         else:  # no water demand
             self.var.nonIrrReturnFlowFraction = globals.inZero.copy()
@@ -1811,11 +1812,9 @@ class water_demand:
 
             if self.var.modflow:
                 # if available storage is too low, no pumping in this cell (defined in transient module)
+                
+                self.var.nonFossilGroundwaterAbs = np.minimum(self.var.groundwater_storage_available, self.var.pot_GroundwaterAbstract)  # gwstorage_cell
 
-                self.var.nonFossilGroundwaterAbs = np.where(self.var.groundwater_storage_available > (
-                        1 - self.var.availableGWStorageFraction) * self.var.gwstorage_full,
-                                                            np.minimum(self.var.groundwater_storage_available,
-                                                                       self.var.pot_GroundwaterAbstract), 0)
             else:
                 self.var.nonFossilGroundwaterAbs = np.maximum(0., np.minimum(self.var.readAvlStorGroundwater,
                                                                              self.var.pot_GroundwaterAbstract))
@@ -1863,7 +1862,7 @@ class water_demand:
                     self.var.act_irrPaddyWithdrawal = self.var.act_irrWithdrawal - self.var.act_irrNonpaddyWithdrawal
 
                     act_gw = np.copy(self.var.nonFossilGroundwaterAbs)
-
+                    
 
 
                 elif self.var.includeIndusDomesDemand:  # all demands are taken into account
@@ -1954,7 +1953,7 @@ class water_demand:
                     self.var.act_irrWithdrawal = np.copy(self.var.totalIrrDemand)
 
                     act_gw = np.copy(self.var.nonFossilGroundwaterAbs)
-
+                
                 else:
                     # Fossil groundwater abstractions are allowed (act = pot)
                     if 'zonal_abstraction' in option:
@@ -2091,10 +2090,10 @@ class water_demand:
             if self.var.modflow:
                 if self.var.GW_pumping:  # pumping demand is sent to ModFlow (used in transient module)
                     # modfPumpingM is initialized every "modflow_timestep" in "groundwater_modflow/transient.py"
+                    self.var.modfPumpingM = globals.inZero.copy() 
                     self.var.modfPumpingM += act_gw
                     self.var.Pumping_daily = np.copy(act_gw)
                     self.var.PumpingM3_daily = act_gw * self.var.cellArea
-
             if self.var.sectorSourceAbstractionFractions:
 
                 self.var.act_indWithdrawal = self.var.Channel_Industry + self.var.wwt_Industry + self.var.Lake_Industry + \

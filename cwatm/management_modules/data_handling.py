@@ -1736,3 +1736,6 @@ def divideValues(x,y, default = 0.):
     # have to solve this without err handler to get the error message back
 
     return z
+
+def divideArrays(x1, x2):
+    return(np.nan_to_num(x1 / x2, 0.))

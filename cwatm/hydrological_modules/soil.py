@@ -744,12 +744,14 @@ class soil(object):
         self.var.totalPotET[No] = np.maximum(self.var.totalPotET[No], self.var.actualET[No])
         # groundwater recharge
         toGWorInterflow = self.var.perc3toGW[No] + self.var.prefFlow[No]
-        self.var.interflow[No] = self.var.percolationImp * toGWorInterflow
 
         if self.var.modflow:
-            self.var.gwRecharge[No] = (1 - self.var.percolationImp) * toGWorInterflow
+            self.var.gwRecharge[No] = np.minimum(self.var.permeability_v, toGWorInterflow)
+            self.var.interflow[No] = toGWorInterflow - self.var.gwRecharge[No]
         else:
+            self.var.interflow[No] = self.var.percolationImp * toGWorInterflow
             self.var.gwRecharge[No] = (1 - self.var.percolationImp) * toGWorInterflow - self.var.capRiseFromGW[No]
+            
 
 
         if checkOption('calcWaterBalance'):

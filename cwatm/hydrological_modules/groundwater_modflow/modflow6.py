@@ -1,7 +1,6 @@
 from time import time
 from contextlib import contextmanager
 import os
-
 import numpy as np
 
 import importlib
@@ -9,6 +8,7 @@ import importlib
 #from xmipy import XmiWrapper
 #import flopy
 import platform
+
 
 @contextmanager
 def cd(newdir):
@@ -38,15 +38,18 @@ class ModFlowSimulation:
         top,
         bottom,
         basin,
+        confined_only,
         head,
         topography,
         permeability,
+        permeability_vertical,
         load_from_disk=False,
         setpumpings=False,
         pumpingloc=None,
         verbose=False,
-        complex_solver = False
+        complex_solver=False
     ):
+
 
         flopy = importlib.import_module("flopy", package=None)
 
@@ -93,78 +96,82 @@ class ModFlowSimulation:
                                            rcloserecord=[0.1 * 24 * 3600 * timestep * np.nansum(basin),
                                                          'L2NORM_RCLOSE'])
 
+            # create iterative model solution and register the gwf model with it
+            ims = flopy.mf6.ModflowIms(sim, print_option=None, complexity='COMPLEX', linear_acceleration='BICGSTAB')
 
             # create gwf model
             # MODIF LUCA
-            gwf = flopy.mf6.ModflowGwf(sim, modelname=self.name, newtonoptions='under_relaxation', print_input=False, print_flows=False)  # newtonoptions='under_relaxation' can be tried if there is no convergence
+            gwf = flopy.mf6.ModflowGwf(sim, modelname=self.name, newtonoptions='under_relaxation', print_input=False, print_flows=False)
 
             discretization = flopy.mf6.ModflowGwfdis(gwf, nlay=nlay, nrow=self.nrow, ncol=self.ncol,
                 delr=self.rowsize, delc=self.colsize, top=top,
                 botm=bottom, idomain=self.basin, nogrb=True)
 
             initial_conditions = flopy.mf6.ModflowGwfic(gwf, strt=head)
-            node_property_flow = flopy.mf6.ModflowGwfnpf(gwf, save_flows=True, icelltype=1, k=permeability*timestep)
-
+            
+            # if vertical is assigned -> use K33 
+            node_property_flow = flopy.mf6.ModflowGwfnpf(gwf, save_flows=True, icelltype=confined_only, k=permeability*timestep, k33=permeability_vertical*timestep)
+ 
             # MODIF LUCA
             output_control = flopy.mf6.ModflowGwfoc(gwf, head_filerecord=f'{self.name}.hds',
-                                                    saverecord=[('HEAD', 'FREQUENCY', 10)])
-            #output_control = flopy.mf6.ModflowGwfoc(
-            #    gwf,
-            #    head_filerecord=f'{self.name}.hds',
-            #    headprintrecord=[
-            #        ('COLUMNS', 10, 'WIDTH', 15,
-            #            'DIGITS', 6, 'GENERAL')],
-            #    saverecord=[('HEAD', 'ALL')],
-            #    printrecord=[('HEAD', 'ALL'),
-            #                    ('BUDGET', 'ALL')]
-            #)
-
+            #budget_filerecord = f'{self.name}.bud',
+            saverecord=[('HEAD', 'FREQUENCY', 10)])#, ('BUDGET', 'ALL')])
+     
             storage = flopy.mf6.ModflowGwfsto(gwf,
                 save_flows=False,
-                iconvert=1,
+                iconvert=confined_only,
                 ss=specific_storage,  # specific storage
                 sy=specific_yield,  # specific yield
                 steady_state=False,
                 transient=True,
             )
 
-            recharge = np.zeros((self.basin.sum(), 4), dtype=np.int32)
-            recharge_locations = np.where(self.basin == True)  # only set wells where basin is True
+            # MODIFIED DOR FRIDMAN - Currently only allowed to have one mask for all layers
+            basin_map = np.where(self.basin[0], self.basin[0], False)
+            #basin_map = np.where(self.basin[0], self.basin[0], np.where(self.basin[1], self.basin[1], False))
+            #print(basin_map.shape)
+            recharge = np.zeros((basin_map.sum(), 4), dtype=np.int32)
+            recharge_locations = np.where(basin_map == True)  # only set wells where basin is True
+            
             # 0: layer, 1: y-idx, 2: x-idx, 3: rate
-            recharge[:,0] = 0
+            recharge[:, 0] = 0
             recharge[:, 1] = recharge_locations[0]
             recharge[:, 2] = recharge_locations[1]
-            #recharge = np.zeros((self.basin.sum(), 2), dtype=np.int32)
-            #recharge[0, 0] =
+
             recharge = recharge.tolist()
 
-            # Recharge is > 0, and already given in m/timestep per ModFlow cell
             recharge = flopy.mf6.ModflowGwfrch(gwf, fixed_cell=False,
                               print_input=False, print_flows=False,
                               save_flows=False, boundnames=None,
                               maxbound=self.basin.sum(), stress_period_data=recharge)
 
             if setpumpings == True:
+                # MODIFIED DOR FRIDMAN
                 wells = np.zeros((self.wellsloc.sum(), 4), dtype=np.int32)
                 well_locations = np.where(self.wellsloc == True)  # only set wells where basin is True
                 # 0: layer, 1: y-idx, 2: x-idx, 3: rate
-                wells[:, 1] = well_locations[0]
-                wells[:, 2] = well_locations[1]
+                wells[:, 0] = well_locations[0]
+                wells[:, 1] = well_locations[1]                
+                wells[:, 2] = well_locations[2]
                 wells = wells.tolist()
 
-                # Pumping is < 0 for abstraction, and is already given here in m3/timestep per ModFlow cell
                 wells = flopy.mf6.ModflowGwfwel(gwf, print_input=False, print_flows=False, save_flows=False,
                                             maxbound=self.basin.sum(), stress_period_data=wells,
                                             boundnames=False, auto_flow_reduce=0.1)
-
+            
+            # MODIFIED DOR FRIDMAN
+            topography2 = np.array([topography] * nlay)
+            permeability2 = permeability.copy()
+            
             # MODIF LUCA
             drainage = np.zeros((self.basin.sum(), 5))  # Only i,j,k indices should be integer
             drainage_locations = np.where(self.basin == True)  # only set wells where basin is True
             # 0: layer, 1: y-idx, 2: x-idx, 3: drainage altitude, 4: permeability
-            drainage[:, 1] = drainage_locations[0]
-            drainage[:, 2] = drainage_locations[1]
-            drainage[:, 3] = topography[drainage_locations]  # This one should not be an integer
-            drainage[:, 4] = permeability[0, self.basin == True] * self.rowsize * self.colsize * timestep
+            drainage[:, 0] = drainage_locations[0]
+            drainage[:, 1] = drainage_locations[1]
+            drainage[:, 2] = drainage_locations[2]
+            drainage[:, 3] = topography2[drainage_locations]  # This one should not be an integer
+            drainage[:, 4] = permeability2[self.basin == True] * self.rowsize * self.colsize # removed ref to layer 0; permeability[0, self.basin == True]...
             drainage = drainage.tolist()
             drainage = [[int(i), int(j), int(k) ,l, m] for i, j, k, l, m in drainage]  # MODIF LUCA
 
@@ -172,6 +179,7 @@ class ModFlowSimulation:
                                         print_input=False, print_flows=False, save_flows=False)
             
             sim.write_simulation()
+            ii = 1
             # sim.run_simulation()
         elif self.verbose:
             print("Loading MODFLOW model from disk")
@@ -233,8 +241,6 @@ class ModFlowSimulation:
         # use the view of the first part of the array up to the number of active
         # (non-basined) cells
         self.recharge = self.mf6.get_value_ptr(recharge_tag)[:, 0]
-
-        # print(self.mf6.get_output_var_names())
         
         head_tag = self.mf6.get_var_address("X", self.name)
         self.head = self.mf6.get_value_ptr(head_tag)
@@ -244,6 +250,7 @@ class ModFlowSimulation:
             self.well_rate = self.mf6.get_value_ptr(well_tag)[:, 0]
             actualwell_tag = self.mf6.get_var_address("SIMVALS", self.name, "WEL_0")
             self.actualwell_rate = self.mf6.get_value_ptr(actualwell_tag)
+
 
         drainage_tag = self.mf6.get_var_address("BOUND", self.name, "DRN_0")
         self.drainage = self.mf6.get_value_ptr(drainage_tag)[:, 0]
@@ -267,7 +274,9 @@ class ModFlowSimulation:
 
     def set_recharge(self, recharge):
         """Set recharge, value in m/day"""
-        recharge = recharge[self.basin == True]
+        # MODIFIED DOR FRIDMAN - ASSUMES ALL LAYER MASKS ARE THE SAME
+        basin_map =  self.basin.copy()[0]
+        recharge = recharge[0][basin_map == True]
         self.recharge[:] = recharge * (self.rowsize * self.colsize)
     
     def set_groundwater_abstraction(self, groundwater_abstraction):
