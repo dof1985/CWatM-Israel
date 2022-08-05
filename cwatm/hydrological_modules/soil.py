@@ -214,7 +214,10 @@ class soil(object):
                                                                   value='Groundwater depth')
         if 'gw_depth_sim_obs' in binding:
             self.var.gwdepth_adjuster = loadmap('gw_depth_sim_obs')
-
+        
+        # create empty variable for actual recharge
+        self.var.actual_GWrechargeM = globals.inZero.copy()
+        self.var.sum_gwRecharge_adjusted = globals.inZero.copy()
 # --------------------------------------------------------------------------
 # --------------------------------------------------------------------------
 
@@ -746,8 +749,18 @@ class soil(object):
         toGWorInterflow = self.var.perc3toGW[No] + self.var.prefFlow[No]
 
         if self.var.modflow:
-            self.var.gwRecharge[No] = np.minimum(self.var.permeability_v, toGWorInterflow)
-            self.var.interflow[No] = toGWorInterflow - self.var.gwRecharge[No]
+            '''
+                modflow recharge can be rejected due to low permeability or high saturation of shallow aquifers. These lines
+                tackle this discrepancy by adding rejected_recharge of time 't' to interflow in time 't+1'
+                
+                We also reduce discrepancy by limiting allowed recharge with permeability of the top layer
+            '''
+            rejected_recharge = np.maximum(self.var.sum_gwRecharge_adjusted - self.var.actual_GWrechargeM, 0.)
+            self.var.sum_gwRecharge_adjusted -= rejected_recharge
+            
+            
+            self.var.gwRecharge[No] = np.minimum(self.var.permeability_v, toGWorInterflow)  
+            self.var.interflow[No] = toGWorInterflow - self.var.gwRecharge[No] + rejected_recharge
         else:
             self.var.interflow[No] = self.var.percolationImp * toGWorInterflow
             self.var.gwRecharge[No] = (1 - self.var.percolationImp) * toGWorInterflow - self.var.capRiseFromGW[No]
