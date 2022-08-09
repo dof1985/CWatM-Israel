@@ -751,7 +751,8 @@ class groundwater_modflow:
         
         # Sumed recharge is re-initialized here for water budget computing purpose
         self.var.modfPumpingM_actual = globals.inZero.copy()  # compressArray(self.modflow2CWATM(self.permeability[0]*0))
-
+        
+        
 
         if self.var.modflow_timestep == 1 or ((dateVar['curr'] - int(dateVar['curr'] / self.var.modflow_timestep) * self.var.modflow_timestep) == 1):  # if it is the first step of the week,months...
             # ? Can the above line be replaced with: (dateVar['curr']  % self.var.modflow_timestep) == 0:
@@ -806,7 +807,7 @@ class groundwater_modflow:
         zero_recharge = np.where(self.modflow.basin == 1, 0, 0)
         groundwater_recharge_modflow[1:, :, :] = zero_recharge[1:, :, :] 
         # MODIFIED DOR FRIDMAN                                                
-        self.var.sum_gwRecharge_adjusted = compressArray(self.modflow2CWATM(np.nansum(groundwater_recharge_modflow, axis = 0)))
+        #self.var.sum_gwRecharge_adjusted = compressArray(self.modflow2CWATM(np.nansum(groundwater_recharge_modflow, axis = 0)))
         # give the information to ModFlow
         #self.modflow.set_recharge(groundwater_recharge_modflow)
         #print(np.nanmean(- groundwater_recharge_modflow))
@@ -827,7 +828,7 @@ class groundwater_modflow:
         actual_recharge_modflow_array[lyr, :, :] = np.bincount(rch_index, weights=wghts,
                                         minlength=int(self.modflow.nrow * self.modflow.ncol)).reshape((self.modflow.nrow, self.modflow.ncol))
       
-        self.var.actual_GWrechargeM = compressArray(self.modflow2CWATM(actual_recharge_modflow_array[0]))
+        self.var.sum_gwRecharge_actualM = compressArray(self.modflow2CWATM(actual_recharge_modflow_array[0]))
        
        
 
