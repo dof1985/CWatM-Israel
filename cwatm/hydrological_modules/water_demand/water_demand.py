@@ -373,9 +373,7 @@ class water_demand:
                     print('Sector- and source-specific abstraction fractions are activated (water_demand.py)')
                     self.var.sectorSourceAbstractionFractions = True
                     
-                    self.var.includeDesal = False
-                    if 'includeDesalination' in option:
-                        self.var.includeDesal = True
+                    
                     if self.var.includeDesal:
                         self.var.othAbstractionFraction_Desal_Domestic = loadmap(
                             'othAbstractionFraction_Desal_Domestic')
@@ -437,16 +435,7 @@ class water_demand:
                         self.var.gwAbstractionFraction_Irrigation = loadmap(
                             'gwAbstractionFraction_Irrigation')
                 
-            ## load desalination
-            if self.var.includeDesal:
-                if 'desalination_capacity' in binding:
-                    self.var.limitDesalCapacity = True
-                    # load annual capacity
-                    self.var.AvlDesalM3 = loadmap('desalination_capacity') / 365
-                else:
-                    self.var.limitDesalCapacity = False
-                    # Unlimited Desal Capacity
-            
+           
             self.var.using_reservoir_command_areas = False
             self.var.load_command_areas = False
             self.var.load_command_areas_wwt = False
@@ -487,7 +476,7 @@ class water_demand:
                 
                     # Lakes & all non-restricted res. within command areas are removed from the command area
                         self.var.reservoir_command_areas_wwt = np.where(loadmap('waterBodyTyp').astype(int) == 1,
-                                                                    0, np.where(self.var.resId_restricted == 0, 0, self.var.reservoir_command_areas_wwt))
+                                                                    0, np.where((self.var.resId_restricted == 0) * (loadmap('waterBodyTyp').astype(int) == 2), 0, self.var.reservoir_command_areas_wwt))
                         self.var.segmentArea_wwt = np.where(self.var.reservoir_command_areas_wwt > 0,
                                                         npareatotal(self.var.cellArea,
                                                                     self.var.reservoir_command_areas_wwt), self.var.cellArea)
@@ -895,6 +884,9 @@ class water_demand:
 
             # Desalination
             
+            
+            
+            
             self.var.act_DesalWaterAbstractM3 = globals.inZero.copy()
             # Desalination is not allowed without sectorSourceAbstractionFractions
             if self.var.sectorSourceAbstractionFractions:
@@ -905,7 +897,8 @@ class water_demand:
                     pot_Desal_Irrigation = self.var.othAbstractionFraction_Desal_Irrigation * self.var.totalIrrDemand
 
                     pot_DesalAbst = pot_Desal_Domestic + pot_Desal_Livestock + pot_Desal_Industry + pot_Desal_Irrigation
-                    if self.var.limitDesalCapacity:
+                    if not self.var.unlimitedDesal:
+                        self.var.AvlDesalM3 = self.var.desalAnnualCap[dateVar['currDate'].year] / 365
                         abstractLimitCoeff = np.minimum(np.nansum(pot_DesalAbst * self.var.cellArea), self.var.AvlDesalM3) / np.nansum(pot_DesalAbst * self.var.cellArea)
                         self.var.act_DesalWaterAbstractM = pot_DesalAbst * abstractLimitCoeff
                     else:

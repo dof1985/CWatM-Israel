@@ -108,7 +108,22 @@ class initcondition(object):
             #wwtp_to_reservoir.append(transfer)
         #print(wwtp_definitions)
         return wwtp_definitions
-
+    
+    def desalinationCapacity(self, xl_settings_file_path):
+        pd = importlib.import_module("pandas", package=None)
+        df = pd.read_excel(xl_settings_file_path, sheet_name='Desalination')
+        
+        s_year = globals.dateVar['dateStart'].year
+        e_year = globals.dateVar['dateEnd'].year
+        
+        desalCap = {}
+        lastDesal = 0
+        for year in range(s_year, e_year + 1):
+            if np.in1d(year, df['Year']):
+                lastDesal = df[df['Year'] == year]['Capacity'].to_list()[0]
+            desalCap[year] = lastDesal
+        return desalCap
+        
     def initial(self):
         """
         initial part of the initcondition module
@@ -191,7 +206,23 @@ class initcondition(object):
         initCondVarValue.append("unmetDemandPaddy")
         initCondVar.append("unmetDemandNonpaddy")
         initCondVarValue.append("unmetDemandNonpaddy")
-
+        
+        # Desalination
+        self.var.includeDesal = False
+        self.var.unlimitedDesal = False
+        if 'includeDesalination' in option:
+            self.var.includeDesal = checkOption('includeDesalination')
+        
+        if self.var.includeDesal:
+            self.var.unlimitedDesal = returnBool('unlimitedDesalinationCapacity')
+            if not self.var.unlimitedDesal:
+                xl_settings_file_path = cbinding('Excel_settings_file')
+                self.var.desalAnnualCap = self.desalinationCapacity(xl_settings_file_path)
+                
+        
+        
+        
+        
         # groundwater
         if not self.var.modflow:
             initCondVar.append("storGroundwater")
@@ -225,6 +256,8 @@ class initcondition(object):
                 if 'Excel_settings_file' in binding:
                     xl_settings_file_path = cbinding('Excel_settings_file')
                     self.var.reservoir_transfers = self.reservoir_transfers(xl_settings_file_path)
+        
+        # wastewater
         
         if 'includeWastewater' in option:
             if checkOption('includeWastewater'):

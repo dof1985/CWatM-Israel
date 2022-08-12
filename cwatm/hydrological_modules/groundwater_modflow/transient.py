@@ -538,6 +538,10 @@ class groundwater_modflow:
             
             
             if self.var.GW_pumping:
+                
+                if 'correctPumpingDiscrepancy' in binding:
+                    self.var.correctPumpingDiscrepancy = returnBool('correctPumpingDiscrepancy')
+                    
                 self.var.wells_index = []
                 if verboseGW:
                     print('=> THE PUMPING MAP SHOULD BE DEFINED (In transient.py ALSO LINE 420) BEFORE TO RUN THE MODEL AND BE THE SAME FOR ALL THE SIMULATION')
@@ -578,7 +582,7 @@ class groundwater_modflow:
                 # MODIFIED DOR FRIDMAN (bottom=self.layer_boundaries[1:],) (specific_yield = s_yield)
                 
                 
-               
+                
                
                 # initializing the ModFlow6 model
                 self.modflow = ModFlowSimulation(
@@ -724,12 +728,12 @@ class groundwater_modflow:
             self.gwavailable_n_lyrs = head.copy()
             for lyr in range(nlay):
                 satFrac = self.calcSaturatedCellFraction(lyr = lyr, head = head)
-                satFrac_min = self.var.availableGWStorageFraction
+                satFrac_min = self.var.availableGWStorageFraction * self.modflow.basin
                 head_min = self.layer_boundaries[lyr + 1] + satFrac_min * (self.layer_boundaries[lyr] - self.layer_boundaries[lyr + 1])
-            
-                self.gwavailable_n_lyrs[lyr] =  (self.layer_boundaries[lyr] - self.layer_boundaries[lyr + 1]) * ((self.s_stor[lyr] * (head[lyr] * satFrac - head_min * satFrac_min)) + (self.s_yield[lyr] * (satFrac - satFrac_min)) * (self.confinedAquifer_flags[lyr] > 0))
+                
+                self.gwavailable_n_lyrs[lyr] =  (self.layer_boundaries[lyr] - self.layer_boundaries[lyr + 1]) * ((self.s_stor[lyr] * np.maximum(head[lyr] * satFrac - head_min * satFrac_min ,0)) + (self.s_yield[lyr] * np.maximum(satFrac - satFrac_min, 0)) * (self.confinedAquifer_flags[lyr] > 0))
                 self.gwavailable_n_lyrs[lyr] = np.where(self.gwavailable_n_lyrs[lyr]  < 0, 0., self.gwavailable_n_lyrs[lyr])
-
+                
             self.var.groundwater_storage_available = compressArray(self.modflow2CWATM(np.nansum(self.gwavailable_n_lyrs  * self.wells_mask, axis = 0)))  # used in water demand module then
             self.groundwater_storage_available = np.nansum(self.gwavailable_n_lyrs * self.wells_mask, axis = 0)
             
@@ -748,7 +752,7 @@ class groundwater_modflow:
             #print('=> ModFlow coupling is not used')
         
     def dynamic(self):
-        
+  
         # Sumed recharge is re-initialized here for water budget computing purpose
         self.var.modfPumpingM_actual = globals.inZero.copy()  # compressArray(self.modflow2CWATM(self.permeability[0]*0))
         
@@ -809,14 +813,14 @@ class groundwater_modflow:
         # MODIFIED DOR FRIDMAN                                                
         #self.var.sum_gwRecharge_adjusted = compressArray(self.modflow2CWATM(np.nansum(groundwater_recharge_modflow, axis = 0)))
         # give the information to ModFlow
-        #self.modflow.set_recharge(groundwater_recharge_modflow)
+        self.modflow.set_recharge(groundwater_recharge_modflow)
         #print(np.nanmean(- groundwater_recharge_modflow))
         
-        actual_recharge = self.modflow.recharge
-             
-       
-       
+        #print(dir(self.modflow))
+
         
+       
+        actual_recharge = self.modflow.recharge / ( self.domain['rowsize'] * self.domain['colsize'] )
         actual_recharge_modflow_array = np.zeros((nlay_dyn, self.domain['nrow'], self.domain['ncol']), dtype=np.float32)
 
         # modified for layers
@@ -827,15 +831,14 @@ class groundwater_modflow:
         rch_index = self.var.rch_index[int(lyr * active_cells):int((lyr + 1) * active_cells - 1)]
         actual_recharge_modflow_array[lyr, :, :] = np.bincount(rch_index, weights=wghts,
                                         minlength=int(self.modflow.nrow * self.modflow.ncol)).reshape((self.modflow.nrow, self.modflow.ncol))
-      
+
         self.var.sum_gwRecharge_actualM = compressArray(self.modflow2CWATM(actual_recharge_modflow_array[0]))
        
        
-
+        
         ## INSTALLING WELLS
         if self.var.GW_pumping:
             ## Groundwater demand from CWatM installs wells in each Modflow cell
-
             # Groundwater pumping demand from the CWatM waterdemand module, will be decompressed to 2D array
             # CWatM 2D groundwater pumping array is converted into Modflow 2D array
             # Pumping is given to ModFlow in m3 and < 0
@@ -843,30 +846,56 @@ class groundwater_modflow:
             if self.modflow.verbose:
                 print('mean modflow pumping [m]: ', np.nanmean(self.var.modfPumpingM))
             groundwater_abstraction = - self.CWATM2modflow(decompress(self.var.modfPumpingM)) * domain['rowsize'] * domain['colsize'] # BURGENLAND * 100 AND L428
+
             # MODIFIED DOR FRIDMAN - ASSUMES ALL LAYER MASKS ARE THE SAME AND THAT EVERY CELL HAS A PUMP
             # create initial groundwater abstraction
             # groundwater_abstraction2 allowed only from valid cells
-            groundwater_abstraction2 = np.array([groundwater_abstraction  * (np.nansum(self.wells_mask, axis = 0) > 0)] * nlay_dyn) 
+            wellsMask = (np.nansum(self.wells_mask, axis = 0) > 0)
+            groundwater_abstraction2 = np.array([groundwater_abstraction  * wellsMask] * nlay_dyn) 
+            
+            
             # self.modflowGroupByCWATM(self.groundwater_storage_available) -> check if can be fixed
             self.gwAvail_weights = np.minimum(divideArrays(self.groundwater_storage_available, self.CWATM2modflow(decompress(self.var.groundwater_storage_available))), 1.0)
      
             groundwater_abstraction2 = groundwater_abstraction2 * self.gwAvail_weights
-
-            # calculate available water per layer and split abstraction between layers. 
-            StorageInAbstractionCells = self.gwavailable_n_lyrs * self.wells_mask      
-            proportional_groundwater_storage = StorageInAbstractionCells / np.nansum(StorageInAbstractionCells, axis = 0)
             
+            # correct groundwater discrepancy
+            if self.var.correctPumpingDiscrepancy:
+                '''
+                Correct pumping discrepancy between MODFLOW and CWatM. Due to conversion errors, and inaccurate storage estiamtes - it often occurs that CWatM allocated 
+                more groundwater for consumption relative to the volume that is actually being pumped. So np.nansum(self.var.modfPumpingM) > np.nansum(self.var.modfPumpingM_actual)
+                
+                The correction suggested below, inflate requested pumping in all grid cells by a constant, calculated as CWatM pumping request divided by Modflow adjusted pumping request. 
+                The resulting pumping reduces the discrepancy between the two, but causes a spatial mismtach between demand and pumping locations. Therefore, this practice is discourage in 
+                coarse resolution appliactions.
+                
+                User can set it on by setting correctPumpingDiscrepancy = True in the Settings file.
+                '''
+                #print(np.nansum(self.var.modfPumpingM*self.var.cellArea))
+                #print(np.nansum(groundwater_abstraction))
+                #print(np.nansum(groundwater_abstraction2))
+
+                groundwater_abstraction2 =  groundwater_abstraction2 * np.nansum(groundwater_abstraction)/ np.nansum(groundwater_abstraction2)
+                #print(np.nansum(groundwater_abstraction2))
+
+            
+            # calculate available water per layer and split abstraction between layers. 
+            StorageInAbstractionCells = self.gwavailable_n_lyrs * wellsMask  
+            
+            proportional_groundwater_storage = StorageInAbstractionCells / np.nansum(StorageInAbstractionCells, axis = 0)
+            proportional_groundwater_storage = np.where(np.isnan(proportional_groundwater_storage), 0, proportional_groundwater_storage)
             groundwater_abstraction2 = groundwater_abstraction2 * proportional_groundwater_storage
             # update  groundwaster abstraction layers
             # give the information to ModFlow
+
             self.modflow.set_groundwater_abstraction(groundwater_abstraction2)
             
-            #self.var.modfPumpingM_actual = - compressArray(self.modflow2CWATM(np.nansum(groundwater_abstraction2, axis = 0) / (domain['rowsize'] * domain['colsize'])))
 
             # groundwater_abstraction = groundwater_abstraction / 100
             self.groundwater_abstraction2 =  groundwater_abstraction2.copy()
             #self.var.modfPumpingM = globals.inZero.copy() 
-
+            
+            
         # running ModFlow
         self.modflow.step()
         #self.modflow.finalize()
@@ -874,7 +903,7 @@ class groundwater_modflow:
         # MODIF LUCA
         # extracting the new simulated hydraulic head map
         head = self.modflow.decompress(self.modflow.head.astype(np.float32))
-
+    
         # MODIF LUCA
         if self.var.writeerror:
             # copying the previous groundwater storage at ModFlow resolution (in meter)
@@ -893,12 +922,16 @@ class groundwater_modflow:
             satFrac = self.calcSaturatedCellFraction(lyr = lyr, head = head)
             satFrac_min = self.var.availableGWStorageFraction
             head_min = self.layer_boundaries[lyr + 1] + satFrac_min * (self.layer_boundaries[lyr] - self.layer_boundaries[lyr + 1])
-            self.gwavailable_n_lyrs[lyr] =  (self.layer_boundaries[lyr] - self.layer_boundaries[lyr + 1]) * ((self.s_stor[lyr] * (head[lyr] * satFrac - head_min * satFrac_min)) + (self.s_yield[lyr] * (satFrac - satFrac_min)) * (self.confinedAquifer_flags[lyr] > 0))
-            self.gwavailable_n_lyrs[lyr] = np.where(self.gwavailable_n_lyrs[lyr] < 0, 0. , self.gwavailable_n_lyrs[lyr])
-        self.var.groundwater_storage_available = compressArray(self.modflow2CWATM(np.nansum(self.gwavailable_n_lyrs  * self.wells_mask, axis = 0)))  # used in water demand module then
-        # calculate groundwater storage available for MODFLOW & gwAvailable allocation weights
-        self.groundwater_storage_available = np.nansum(self.gwavailable_n_lyrs  * self.wells_mask, axis = 0)
 
+            self.gwavailable_n_lyrs[lyr] =  (self.layer_boundaries[lyr] - self.layer_boundaries[lyr + 1]) * ((self.s_stor[lyr] * np.maximum(head[lyr] * satFrac - head_min * satFrac_min ,0)) + (self.s_yield[lyr] * np.maximum(satFrac - satFrac_min, 0)) * (self.confinedAquifer_flags[lyr] > 0))
+            self.gwavailable_n_lyrs[lyr] = np.where(self.gwavailable_n_lyrs[lyr] < 0, 0. , self.gwavailable_n_lyrs[lyr])
+        
+        wellsMask = (np.nansum(self.wells_mask, axis = 0) > 0)
+        # calculate groundwater storage available for MODFLOW & gwAvailable allocation weights
+        self.groundwater_storage_available = np.nansum(self.gwavailable_n_lyrs  * wellsMask, axis = 0)
+        self.var.groundwater_storage_available = compressArray(self.modflow2CWATM(np.nansum(self.gwavailable_n_lyrs  * wellsMask, axis = 0)))  # used in water demand module then
+
+        
         #assert self.permeability.ndim == 3
         # computing the groundwater outflow by re-computing water outflowing the aquifer through the DRAIN ModFlow package
         groundwater_outflow = np.where(head[0] - self.layer_boundaries[0] >= 0,
@@ -928,8 +961,9 @@ class groundwater_modflow:
                 actual_pumping_modflow_array[lyr, :, :] = np.bincount(wells_index, weights=wghts,
                                            minlength=int(self.modflow.nrow * self.modflow.ncol)).reshape((self.modflow.nrow, self.modflow.ncol))
             self.var.modfPumpingM_actual = -compressArray(self.modflow2CWATM(np.nansum(actual_pumping_modflow_array, axis = 0)) / (domain['rowsize'] * domain['colsize']))
-   
-        
+            #print(np.nansum(actual_pumping_modflow_array))
+            #print(np.nansum(self.var.modfPumpingM_actual * self.var.cellArea))
+
         if self.var.writeerror:
             # Check the water balance: recharge = capillary + baseflow + storage change
             modflow_cell_area = self.domain['rowsize'] * self.domain['colsize']  # in m², for water balance computation

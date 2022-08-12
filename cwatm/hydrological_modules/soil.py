@@ -759,8 +759,9 @@ class soil(object):
             lc_rechargeShare = divideValues(self.var.gwRecharge[No], self.var.sum_gwRecharge)
             # correct interflow - rejected recharge added to interflow - maybe it is better to split it between landcovers
             rejected_recharge = np.maximum(self.var.sum_gwRecharge - self.var.sum_gwRecharge_actualM, 0.) * lc_rechargeShare
-              
+
             self.var.gwRecharge[No] = np.minimum(self.var.permeability_v, toGWorInterflow)  
+
             self.var.interflow[No] = toGWorInterflow - self.var.gwRecharge[No]
             self.var.interflow[No] += rejected_recharge
         else:
