@@ -273,7 +273,6 @@ class groundwater_modflow:
         return array
 
     def initial(self):
-        
         # check if we we are using steady state option. Not yet implemented in this version, the user should provide an
         # estimate of the initial water table ("head" variable in the initial part)
 
@@ -353,7 +352,7 @@ class groundwater_modflow:
                 # set 0 for only confined aquifers, if > 0 so a combination of confined and unconfined layers can be used
                 self.confinedAquifer_flags = load_aquifer_coeff(self, var = 'set_confinedAquifer', nlay = nlay)
             else:
-                self.confinedAquifer_flags = 1
+                self.confinedAquifer_flags = np.where(self.modflow_basin, 1., 0.)
             
             # uploading arrays allowing to transform 2D arrays from ModFlow to CWatM and conversely
             modflow_x = np.load(os.path.join(cbinding('cwatm_modflow_indices'), 'modflow_x.npy'))
@@ -538,7 +537,7 @@ class groundwater_modflow:
             
             
             if self.var.GW_pumping:
-                
+                self.var.correctPumpingDiscrepancy = False
                 if 'correctPumpingDiscrepancy' in binding:
                     self.var.correctPumpingDiscrepancy = returnBool('correctPumpingDiscrepancy')
                     
@@ -715,6 +714,7 @@ class groundwater_modflow:
                 '''
                 
                 satFrac = self.calcSaturatedCellFraction(lyr = lyr, head = head)
+               
                 
                 self.groundwater_storage_n_layer[lyr] = (self.layer_boundaries[lyr] - self.layer_boundaries[lyr + 1]) * satFrac * (self.s_stor[lyr] * head[lyr] + self.s_yield[lyr] * (self.confinedAquifer_flags[lyr] > 0))
             # converting the groundwater storage from ModFlow to CWatM map (in meter)
@@ -769,7 +769,8 @@ class groundwater_modflow:
         # Every modflow timestep (e.g. 7,14,30... days)
         # print('dateVarcurr', dateVar['curr'])
         if dateVar['curr'] == 1 or (dateVar['curr'] % self.var.modflow_timestep) == 0:
-
+            
+        
             self.var.modflow_compteur += 1
 
             # converting the CWatM recharge into ModFlow recharge (in meter)
@@ -833,8 +834,10 @@ class groundwater_modflow:
                                         minlength=int(self.modflow.nrow * self.modflow.ncol)).reshape((self.modflow.nrow, self.modflow.ncol))
 
         self.var.sum_gwRecharge_actualM = compressArray(self.modflow2CWATM(actual_recharge_modflow_array[0]))
-       
-       
+        
+        self.var.prefFlow_GW = divideValues(self.var.sum_prefFlow, self.var.sum_prefFlow + self.var.sum_perc3toGW) * self.var.sum_gwRecharge_actualM
+        self.var.perc3toGW_GW = divideValues(self.var.sum_perc3toGW,
+                                            self.var.sum_prefFlow + self.var.sum_perc3toGW) * self.var.sum_gwRecharge_actualM
         
         ## INSTALLING WELLS
         if self.var.GW_pumping:

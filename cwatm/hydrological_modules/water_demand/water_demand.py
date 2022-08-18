@@ -906,17 +906,24 @@ class water_demand:
      
                     #self.var.act_DesalWaterAbstractM = self.var.act_DesalWaterAbstractM3 / self.var.cellArea
             if self.var.sectorSourceAbstractionFractions:
-                self.var.Desal_Domestic = np.minimum(self.var.act_DesalWaterAbstractM,
-                                                       self.var.othAbstractionFraction_Desal_Domestic * self.var.domesticDemand)
-                self.var.Desal_Livestock = np.minimum(self.var.act_DesalWaterAbstractM - self.var.Desal_Domestic,
-                                                        self.var.othAbstractionFraction_Desal_Livestock * self.var.livestockDemand)
-                self.var.Desal_Industry = np.minimum(
-                    self.var.act_DesalWaterAbstractM - self.var.Desal_Domestic - self.var.Desal_Livestock,
-                    self.var.othAbstractionFraction_Desal_Industry * self.var.industryDemand)
-                self.var.Desal_Irrigation = np.minimum(
-                    self.var.act_DesalWaterAbstractM - self.var.Desal_Domestic - self.var.Desal_Livestock - self.var.Desal_Industry,
-                    self.var.othAbstractionFraction_Desal_Irrigation * self.var.totalIrrDemand)
-
+                if self.var.includeDesal:
+                    self.var.Desal_Domestic = np.minimum(self.var.act_DesalWaterAbstractM,
+                                                        self.var.othAbstractionFraction_Desal_Domestic * self.var.domesticDemand)
+                    self.var.Desal_Livestock = np.minimum(self.var.act_DesalWaterAbstractM - self.var.Desal_Domestic,
+                                                            self.var.othAbstractionFraction_Desal_Livestock * self.var.livestockDemand)
+                    self.var.Desal_Industry = np.minimum(
+                        self.var.act_DesalWaterAbstractM - self.var.Desal_Domestic - self.var.Desal_Livestock,
+                        self.var.othAbstractionFraction_Desal_Industry * self.var.industryDemand)
+                    self.var.Desal_Irrigation = np.minimum(
+                        self.var.act_DesalWaterAbstractM - self.var.Desal_Domestic - self.var.Desal_Livestock - self.var.Desal_Industry,
+                        self.var.othAbstractionFraction_Desal_Irrigation * self.var.totalIrrDemand)
+                else:
+                    ## if desalination is turn off  set desalination fraction to zero
+                    
+                    self.var.Desal_Domestic = globals.inZero.copy()
+                    self.var.Desal_Livestock = globals.inZero.copy()
+                    self.var.Desal_Industry = globals.inZero.copy()
+                    self.var.Desal_Irrigation = globals.inZero.copy()
                 
             # surface water abstraction that can be extracted to fulfill totalDemand
             # - based on ChannelStorage and swAbstractionFraction * totalDemand

@@ -743,10 +743,11 @@ class landcoverType(object):
                 vars(self.var)["sum_" + variable] += self.var.fracVegCover[No] * vars(self.var)[variable][No]
 
         #print "--", self.var.sum_directRunoff
-
-        self.var.prefFlow_GW = divideValues(self.var.sum_prefFlow, self.var.sum_prefFlow + self.var.sum_perc3toGW) * self.var.sum_gwRecharge
-        self.var.perc3toGW_GW = divideValues(self.var.sum_perc3toGW,
-                                                self.var.sum_prefFlow + self.var.sum_perc3toGW) * self.var.sum_gwRecharge
+        
+        if not self.var.modflow:
+            self.var.prefFlow_GW = divideValues(self.var.sum_prefFlow, self.var.sum_prefFlow + self.var.sum_perc3toGW) * self.var.sum_gwRecharge
+            self.var.perc3toGW_GW = divideValues(self.var.sum_perc3toGW,
+                                                    self.var.sum_prefFlow + self.var.sum_perc3toGW) * self.var.sum_gwRecharge
         #print('landcoverType, first use of permeability')
 
         if self.var.modflow:
