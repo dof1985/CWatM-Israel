@@ -68,10 +68,11 @@ class ModFlowSimulation:
         if not os.path.exists(self.working_directory):
             os.makedirs(self.working_directory)
         self.verbose = verbose
-
+       
         if not load_from_disk:
             if self.verbose:
                 print("Creating MODFLOW model")
+          
             sim = flopy.mf6.MFSimulation(
                 sim_name=self.name,
                 version='mf6',
@@ -95,7 +96,6 @@ class ModFlowSimulation:
                 ims = flopy.mf6.ModflowIms(sim, print_option=None, complexity='SIMPLE', linear_acceleration='BICGSTAB',
                                            rcloserecord=[0.1 * 24 * 3600 * timestep * np.nansum(basin),
                                                          'L2NORM_RCLOSE'])
-
             # create iterative model solution and register the gwf model with it
             ims = flopy.mf6.ModflowIms(sim, print_option=None, complexity='COMPLEX', linear_acceleration='BICGSTAB')
 
@@ -137,9 +137,11 @@ class ModFlowSimulation:
             recharge[:, 0] = 0
             recharge[:, 1] = recharge_locations[0]
             recharge[:, 2] = recharge_locations[1]
-
+            
+            
             recharge = recharge.tolist()
-
+            
+           
             recharge = flopy.mf6.ModflowGwfrch(gwf, fixed_cell=False,
                               print_input=False, print_flows=False,
                               save_flows=False, boundnames=None,
@@ -177,15 +179,15 @@ class ModFlowSimulation:
 
             drainage = flopy.mf6.ModflowGwfdrn(gwf, maxbound=self.basin.sum(), stress_period_data=drainage,
                                         print_input=False, print_flows=False, save_flows=False)
-            
             sim.write_simulation()
+            
             ii = 1
             # sim.run_simulation()
         elif self.verbose:
             print("Loading MODFLOW model from disk")
         
         self.load_bmi(setpumpings)
-
+     
     def bmi_return(self, success, model_ws):
         """
         parse libmf6.so and libmf6.dll stdout file
@@ -194,9 +196,10 @@ class ModFlowSimulation:
         return success, open(fpth).readlines()
 
     def load_bmi(self, setpump):
+        
         """Load the Basic Model Interface"""
         success = False
-                
+      
         if platform.system() == 'Windows':
             library_name = 'libmf6.dll'
         elif platform.system() == 'Linux':
@@ -211,21 +214,25 @@ class ModFlowSimulation:
             self.mf6 = xmipy.XmiWrapper(library_path)
 
         except Exception as e:
+            
             print("Failed to load " + library_path)
             print("with message: " + str(e))
             return self.bmi_return(success, self.working_directory)
 
         with cd(self.working_directory):
-
+            
             # modflow requires the real path (no symlinks etc.)
             config_file = os.path.realpath('mfsim.nam')
+         
             if not os.path.exists(config_file):
                 raise FileNotFoundError(f"Config file {config_file} not found on disk. Did you create the model first (load_from_disk = False)?")
 
             # initialize the model
             try:
                 self.mf6.initialize(config_file)
+                
             except:
+                
                 return self.bmi_return(success, self.working_directory)
 
             if self.verbose:

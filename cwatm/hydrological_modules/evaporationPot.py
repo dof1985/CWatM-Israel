@@ -67,7 +67,42 @@ class evaporationPot(object):
         """
 
         #self.var.sumETRef = globals.inZero.copy()
-        self.var.cropCorrect = loadmap('crop_correct')
+        
+    
+        """
+        Calibrate with landcover specific crop correct - if in binding - multiply cropCorrect * cropCorrectSpec
+        * Forest No.0 - use forest_Cropcorrect
+        * Grasland/non irrigated land No.1 - use grassland_Cropcorrect
+        * Paddy irrigation No.2 - use irrPaddyCrop_correct_Cropcorrect
+        * non-Paddy irrigation No.3 - use irrNonPaddyCrop_correct_Cropcorrect
+        * Sealed area No.4 - use sealed_Cropcorrect
+        * Water covered area No.5 - use water_Cropcorrect
+        """
+        
+        self.var.cropCorrect = np.repeat(loadmap('crop_correct'), 6)
+        
+        if 'forest_Cropcorrect' in binding:
+            self.var.cropCorrect[0] = loadmap('forest_Cropcorrect')
+            
+        if 'grassland_Cropcorrect' in binding:
+            self.var.cropCorrect[1] = loadmap('grassland_Cropcorrect')
+
+        if 'irrPaddy_Cropcorrect' in binding:
+            self.var.cropCorrect[2] = loadmap('irrPaddy_Cropcorrect')
+        
+        if 'irrNonPaddy_Cropcorrect' in binding:
+            self.var.cropCorrect[3] = loadmap('irrNonPaddy_Cropcorrect')
+            
+        if 'sealed_Cropcorrect' in binding:
+            self.var.cropCorrect[4] = loadmap('sealed_Cropcorrect')
+            
+        if 'water_Cropcorrect' in binding:
+            self.var.cropCorrect[5] = loadmap('water_Cropcorrect')
+        # correct grassland_KC
+#irrNonPaddyCrop_correct = 0.8  
+        
+# correct grassland_KC
+#grasslandCrop_correct =  0.55
 
         if checkOption('calc_evaporation'):
 

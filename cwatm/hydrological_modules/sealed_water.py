@@ -50,13 +50,17 @@ class sealed_water(object):
         :param coverType: Land cover type: forest, grassland  ...
         :param No: number of land cover type: forest = 0, grassland = 1 ...
         """
+        
 
         if No > 3:
             if coverType == "water":
                 # bigger than 1.0 because of wind evaporation
                 mult = 1.0
             else:
-                mult = 0.2  # evaporation from open areas on sealed area estimated as 0.2 EWRef
+                if 'RelUrbanEvap' in binding:
+                    mult = np.minimum(1.0, np.maximum(0.0, loadmap('RelUrbanEvap')))  # evaporation from open areas on sealed area is between 0.0 - 1.0 * EWRef
+                else:
+                    mult = 0.2 # evaporation from open areas on sealed area estimated as 0.2 EWRef
 
             if self.var.modflow:  # Capillary rise from ModFlow occuring under lakes is sent to runoff
                 self.var.openWaterEvap[No] = np.minimum(mult * self.var.EWRef, self.var.availWaterInfiltration[No] + self.var.capillar)

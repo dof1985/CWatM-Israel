@@ -714,7 +714,7 @@ class soil(object):
 
                     self.var.actTransTotal_crops_nonIrr[c] = np.where(self.var.fracVegCover[1] * self.var.cropKC[1] > 0,
                                                                       (self.var.fracCrops_nonIrr[c] *
-                                                                       self.var.currentKC[c] * self.var.cropCorrect) / (
+                                                                       self.var.currentKC[c] * self.var.cropCorrect[1]) / (
                                                                                   self.var.fracVegCover[1] *
                                                                                   self.var.cropKC[1]),
                                                                       0) * self.var.actTransTotal_grasslands

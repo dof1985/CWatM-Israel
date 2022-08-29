@@ -299,7 +299,7 @@ class groundwater_modflow:
                 print('ModFlow is activated')
                 print('ModFlow timestep is : ', self.var.modflow_timestep, ' days\n')
 
-            modflow_directory = cbinding('PathGroundwaterModflow')
+            #modflow_directory = cbinding('PathGroundwaterModflow')
             modflow_directory_output = cbinding('PathGroundwaterModflowOutput')
 
             directory_mf6dll = cbinding('path_mf6dll')
@@ -581,8 +581,6 @@ class groundwater_modflow:
                 # MODIFIED DOR FRIDMAN (bottom=self.layer_boundaries[1:],) (specific_yield = s_yield)
                 
                 
-                
-               
                 # initializing the ModFlow6 model
                 self.modflow = ModFlowSimulation(
                     'transient',

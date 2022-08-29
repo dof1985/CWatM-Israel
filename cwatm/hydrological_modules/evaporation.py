@@ -50,10 +50,11 @@ class evaporation(object):
         # crop coefficient read for forest and grassland from file
 
 
-
+        
+        
         # calculate potential bare soil evaporation - only once
         if No == 0:
-            self.var.potBareSoilEvap = self.var.cropCorrect * self.var.minCropKC * self.var.ETRef
+            self.var.potBareSoilEvap = self.var.cropCorrect[No] * self.var.minCropKC * self.var.ETRef
             # calculate snow evaporation
             self.var.snowEvap =  np.minimum(self.var.SnowMelt, self.var.potBareSoilEvap)
             self.var.SnowMelt = self.var.SnowMelt - self.var.snowEvap
@@ -355,6 +356,7 @@ class evaporation(object):
                     self.var.fallownonIrr_max = np.maximum(self.var.fallownonIrr, self.var.fallownonIrr_max)
 
                     self.var.availableArableLand = self.var.fallowIrr + self.var.fracVegCover[1] - frac_totalnonIrr
+            
 
             if No == 1:
 
@@ -380,7 +382,8 @@ class evaporation(object):
 
         # calculate potential ET
         ##  self.var.totalPotET total potential evapotranspiration for a reference crop for a land cover class [m]
-        self.var.totalPotET[No] = self.var.cropCorrect * self.var.cropKC[No] * self.var.ETRef
+        
+        self.var.totalPotET[No] = self.var.cropCorrect[No] * self.var.cropKC[No] * self.var.ETRef
 
         # calculate transpiration
 
@@ -394,7 +397,7 @@ class evaporation(object):
 
                 for c in range(len(self.var.Crops)):
 
-                    self.var.PotET_crop[c] = self.var.cropCorrect * self.var.currentKC[c] * self.var.ETRef
+                    self.var.PotET_crop[c] = self.var.cropCorrect[No] * self.var.currentKC[c] * self.var.ETRef
                     self.var.totalPotET_month[c] += self.var.PotET_crop[c] #self.var.cropCorrect * self.var.currentKC[c] * self.var.ETRef #np.maximum(0., self.var.cropCorrect * self.var.currentKC[c] * self.var.ETRef - self.var.potBareSoilEvap - self.var.snowEvap)
 
                     #For creating named crop maps

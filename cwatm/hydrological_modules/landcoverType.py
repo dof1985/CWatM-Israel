@@ -341,8 +341,15 @@ class landcoverType(object):
 
         soilVars1 = ['KSat1','KSat2','KSat3','alpha1','alpha2','alpha3', 'lambda1','lambda2','lambda3','thetas1','thetas2','thetas3','thetar1','thetar2','thetar3']
         for variable in soilVars1: vars(self.var)[variable] = []
-
-
+        
+        thetas_fact = 1.0 + globals.inZero.copy()
+        if 'thetas_fact' in binding:
+            thetas_fact = loadmap('thetas_fact')
+        
+        ksat_fact = 1.0 + globals.inZero.copy()
+        if 'ksat_fact' in binding:
+            ksat_fact = loadmap('ksat_fact')
+        
         i = 0
         for coverType in self.var.coverTypes[:2]:
             if i==0:
@@ -350,25 +357,25 @@ class landcoverType(object):
             else:
                 pre = ""
             # ksat in cm/d-1 -> m/dm
-            self.var.KSat1.append((loadmap(pre + "KSat1"))/100)
-            self.var.KSat2.append((loadmap(pre + "KSat2"))/100)
-            self.var.KSat3.append((loadmap(pre + "KSat3"))/100)
+            self.var.KSat1.append((loadmap(pre + "KSat1") * ksat_fact)/100)
+            self.var.KSat2.append((loadmap(pre + "KSat2") * ksat_fact)/100)
+            self.var.KSat3.append((loadmap(pre + "KSat3") * ksat_fact)/100)
             self.var.alpha1.append((loadmap(pre + "alpha1")))
             self.var.alpha2.append((loadmap(pre + "alpha2")))
             self.var.alpha3.append((loadmap(pre + "alpha3")))
             self.var.lambda1.append((loadmap(pre + "lambda1")))
             self.var.lambda2.append((loadmap(pre + "lambda2")))
             self.var.lambda3.append((loadmap(pre + "lambda3")))
-            self.var.thetas1.append((loadmap(pre + "thetas1")))
-            self.var.thetas2.append((loadmap(pre + "thetas2")))
-            self.var.thetas3.append((loadmap(pre + "thetas3")))
+            self.var.thetas1.append((loadmap(pre + "thetas1") * thetas_fact))
+            self.var.thetas2.append((loadmap(pre + "thetas2") * thetas_fact))
+            self.var.thetas3.append((loadmap(pre + "thetas3") * thetas_fact))
             self.var.thetar1.append((loadmap(pre + "thetar1")))
             self.var.thetar2.append((loadmap(pre + "thetar2")))
             self.var.thetar3.append((loadmap(pre + "thetar3")))
             i += 1
 
 
-
+        
         # Van Genuchten n and m coefficients
         # GenuN1=Lambda+1
         with np.errstate(invalid='ignore', divide='ignore'):
@@ -604,6 +611,16 @@ class landcoverType(object):
             self.var.fracVegCover[0] = np.maximum(0., self.var.fracVegCover[0] + 1.0 - sum)
             sum = np.sum(self.var.fracVegCover,axis=0)
             
+           
+            ### CALIBRATE SEALED AREAS - TO INCREASE URBAN INFILTRATION -- SEALED2GRASSLAND ###
+            
+            if 'reduceUrbanRunoff' in binding:
+                # set different min and max values - making it more resnoable
+                reduceUrbanRunoffCoeff = np.maximum(np.minimum(loadmap('reduceUrbanRunoff'), 1.), 0.)
+                sealed2grassland = self.var.fracVegCover[4] * reduceUrbanRunoffCoeff
+                self.var.fracVegCover[4] -= sealed2grassland
+                self.var.fracVegCover[1] += sealed2grassland
+                
             if 'excludeGlacierArea' in option:
                 if checkOption('excludeGlacierArea'):
                     #substract glacier area from grassland fraction later on
