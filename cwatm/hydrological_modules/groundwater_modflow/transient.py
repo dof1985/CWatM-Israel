@@ -521,18 +521,17 @@ class groundwater_modflow:
             
             ## BUILD RECHARGE MASK - TOP LAYER
             self.var.rch_index = []
-            rch_mask_from_file = np.copy(self.modflow_basin[0])
             self.rch_mask = np.copy(self.modflow_basin[0])
-            
-            index_modflowcell = 0
+
+            index_modflowcell = 0            
             for ir in range(self.domain['nrow']):
                 for ic in range(self.domain['ncol']):
-                    if self.modflow_basin[0][ir][ic] == 1 & rch_mask_from_file[ir][ic] == 1:
+                    if self.modflow_basin[0][ir][ic] == 1:
                         self.rch_mask[ir][ic] = True
                         self.var.rch_index.append(index_modflowcell)
                     else:
                         self.rch_mask[ir][ic] = False
-                    index_modflowcell += 1
+                    index_modflowcell += 1  
             ## END BUILDING RECHARGE MASK
             
             
@@ -809,16 +808,22 @@ class groundwater_modflow:
         # recharge only for the top layer
         zero_recharge = np.where(self.modflow.basin == 1, 0, 0)
         groundwater_recharge_modflow[1:, :, :] = zero_recharge[1:, :, :] 
+        
         # MODIFIED DOR FRIDMAN                                                
         #self.var.sum_gwRecharge_adjusted = compressArray(self.modflow2CWATM(np.nansum(groundwater_recharge_modflow, axis = 0)))
         # give the information to ModFlow
-        self.modflow.set_recharge(groundwater_recharge_modflow)
-        #print(np.nanmean(- groundwater_recharge_modflow))
         
-        #print(dir(self.modflow))
+        # cancel recharge in cells with negative storage - e.g., head < bottom_of_cell - recharged that is deleted will be accounted as 
+        # rejected recharge in the next time-step in soil.py
+        negativeStroage = (self.modflow.decompress(self.modflow.head.astype(np.float32))  - self.layer_boundaries[1:, :, :]) < 0
+        groundwater_recharge_modflow = np.where(negativeStroage, 0, groundwater_recharge_modflow)
+        
+        
+        
+        self.modflow.set_recharge(groundwater_recharge_modflow)
+
 
         
-       
         actual_recharge = self.modflow.recharge / ( self.domain['rowsize'] * self.domain['colsize'] )
         actual_recharge_modflow_array = np.zeros((nlay_dyn, self.domain['nrow'], self.domain['ncol']), dtype=np.float32)
 
@@ -826,8 +831,9 @@ class groundwater_modflow:
         active_cells = np.nansum(self.modflow.basin) / nlay_dyn
         lyr = 0
          # apply separately for each layer 
-        wghts = actual_recharge[int(lyr * active_cells):int((lyr + 1) * active_cells - 1)]
-        rch_index = self.var.rch_index[int(lyr * active_cells):int((lyr + 1) * active_cells - 1)]
+        wghts = actual_recharge[int(lyr * active_cells):int((lyr + 1) * active_cells)] # active_cells - 1 -> active_cells
+        rch_index = self.var.rch_index[int(lyr * active_cells):int((lyr + 1) * active_cells)] # active_cells - 1 -> active_cells
+
         actual_recharge_modflow_array[lyr, :, :] = np.bincount(rch_index, weights=wghts,
                                         minlength=int(self.modflow.nrow * self.modflow.ncol)).reshape((self.modflow.nrow, self.modflow.ncol))
 
@@ -896,7 +902,11 @@ class groundwater_modflow:
             self.groundwater_abstraction2 =  groundwater_abstraction2.copy()
             #self.var.modfPumpingM = globals.inZero.copy() 
             
-            
+ 
+       
+        #print(np.nanmean(groundwater_abstraction2))   
+        #print(groundwater_recharge_modflow.shape)
+             
         # running ModFlow
         self.modflow.step()
         #self.modflow.finalize()
@@ -957,8 +967,8 @@ class groundwater_modflow:
             active_cells = np.nansum(self.modflow.basin) / nlay_dyn
             for lyr in range(nlay_dyn):
                 # apply separately for each layer 
-                wghts = actual_pumping[int(lyr * active_cells):int((lyr + 1) * active_cells - 1)]
-                wells_index = self.var.wells_index[int(lyr * active_cells):int((lyr + 1) * active_cells - 1)]
+                wghts = actual_pumping[int(lyr * active_cells):int((lyr + 1) * active_cells)] # active_cells - 1 -> active_cells
+                wells_index = self.var.wells_index[int(lyr * active_cells):int((lyr + 1) * active_cells)] # active_cells - 1 -> active_cells
                 actual_pumping_modflow_array[lyr, :, :] = np.bincount(wells_index, weights=wghts,
                                            minlength=int(self.modflow.nrow * self.modflow.ncol)).reshape((self.modflow.nrow, self.modflow.ncol))
             self.var.modfPumpingM_actual = -compressArray(self.modflow2CWATM(np.nansum(actual_pumping_modflow_array, axis = 0)) / (domain['rowsize'] * domain['colsize']))
