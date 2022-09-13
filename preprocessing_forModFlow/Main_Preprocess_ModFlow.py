@@ -34,8 +34,10 @@ import numpy as np
 import xarray as xr
 import pyproj
 import os
+import sys
 import rasterio
 import geopandas as gpd
+from configparser import ConfigParser
 
 print('Loaded dependencies')
 # Import Python functions used for creating the maps
@@ -56,17 +58,17 @@ np.seterr(divide='ignore', invalid='ignore')
 # MODEL CONFIGURATION
 # =============================================================================
 
-print('Start Main Script')
+
 iniFile = os.path.normpath(sys.argv[1])
 
-print('ini file:' + iniFile)
+
 #parser = SafeConfigParser()
 parser = ConfigParser()
 parser.read(iniFile)
 
 # FILE_PATHS
-Main_path =  parser.get('FILE_PATHS', 'outputsPath')
-Folder_initial_maps =  parser.get('FILE_PATHS', 'inputsPath')
+Main_path =  parser.get('FILE_PATHS', 'outputsPath') + '\\'
+Folder_initial_maps =  parser.get('FILE_PATHS', 'inputsPath') + '\\'
 
 # load maps' names
 basin_limits_tif_file = parser.get('MODFLOW_INPUTS', 'basinMap')
@@ -74,15 +76,15 @@ initial_dem_tif = parser.get('MODFLOW_INPUTS', 'dem')
 input_cellarea = parser.get('MODFLOW_INPUTS', 'cellArea')
 
 # load parameters and resolutions
-cwatm_epsg = parser.get('MODFLOW_INPUTS', 'cwatm_epsg ')
-modflow_epsg = parser.get('MODFLOW_INPUTS', 'modflow_epsg ')
-res_ModFlow = parser.get('MODFLOW_INPUTS', 'modflow_resolution')
-res_ModFlow_finer = parser.get('MODFLOW_INPUTS', 'modflow_subResolution')
-res_CWATM = parser.get('MODFLOW_INPUTS', 'cwatm_resolution')
-stream_density = parser.get('MODFLOW_INPUTS', 'streamDensity')
-relativeArea = parser.get('MODFLOW_INPUTS', 'relativeAreaThreshold')
+cwatm_epsg = int(parser.get('MODFLOW_INPUTS', 'cwatm_epsg'))
+modflow_epsg = int(parser.get('MODFLOW_INPUTS', 'modflow_epsg'))
+res_ModFlow = float(parser.get('MODFLOW_INPUTS', 'modflow_resolution'))
+res_ModFlow_finer = float(parser.get('MODFLOW_INPUTS', 'modflow_subResolution'))
+res_CWATM = float(parser.get('MODFLOW_INPUTS', 'cwatm_resolution'))
+stream_density = float(parser.get('MODFLOW_INPUTS', 'streamDensity'))
+relativeArea = float(parser.get('MODFLOW_INPUTS', 'relativeAreaThreshold'))
  
-print('Finished Loading data')
+
 '''
 ### GLOBAL VARIABLES ###
 basin_limits_tif_file = "mask_ayalonSorek.tif"  # Mask of the CWATM model ##
