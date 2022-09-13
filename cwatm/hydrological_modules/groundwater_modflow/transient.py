@@ -813,10 +813,12 @@ class groundwater_modflow:
         #self.var.sum_gwRecharge_adjusted = compressArray(self.modflow2CWATM(np.nansum(groundwater_recharge_modflow, axis = 0)))
         # give the information to ModFlow
         
-        # cancel recharge in cells with negative storage - e.g., head < bottom_of_cell - recharged that is deleted will be accounted as 
+        # cancel recharge in dryModflowCells  with negative storage - e.g., head < bottom_of_cell - recharged that is deleted will be accounted as 
         # rejected recharge in the next time-step in soil.py
-        negativeStroage = (self.modflow.decompress(self.modflow.head.astype(np.float32))  - self.layer_boundaries[1:, :, :]) < 0
-        groundwater_recharge_modflow = np.where(negativeStroage, 0, groundwater_recharge_modflow)
+        dryModflowCells = (self.modflow.decompress(self.modflow.head.astype(np.float32))  - self.layer_boundaries[1:, :, :]) < 0
+       
+        # Correct treatment of multiple layers 
+        groundwater_recharge_modflow = np.where(np.nansum(dryModflowCells, axis = 0) == nlay_dyn, 0, groundwater_recharge_modflow)
         
         
         
