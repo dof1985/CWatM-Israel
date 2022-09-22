@@ -459,7 +459,7 @@ class water_demand:
                         self.var.reservoir_command_areas = loadmap('reservoir_command_areas').astype(int)
 
                         # Lakes/restricted reservoirs within command areas are removed from the command area
-                        self.var.reservoir_command_areas = np.where(loadmap('waterBodyTyp').astype(int) == 1,
+                        self.var.reservoir_command_areas = np.where(self.var.waterBodyTyp_unchanged == 1,
                                                                 0, np.where(self.var.resId_restricted > 0, 0, self.var.reservoir_command_areas))
                         self.var.segmentArea = np.where(self.var.reservoir_command_areas > 0,
                                                         npareatotal(self.var.cellArea,
@@ -475,8 +475,8 @@ class water_demand:
                         self.var.reservoir_command_areas_wwt = loadmap('reservoir_command_areas_restricted').astype(int)
                 
                     # Lakes & all non-restricted res. within command areas are removed from the command area
-                        self.var.reservoir_command_areas_wwt = np.where(loadmap('waterBodyTyp').astype(int) == 1,
-                                                                    0, np.where((self.var.resId_restricted == 0) * (loadmap('waterBodyTyp').astype(int) == 2), 0, self.var.reservoir_command_areas_wwt))
+                        self.var.reservoir_command_areas_wwt = np.where(self.var.waterBodyTyp_unchanged == 1,
+                                                                    0, np.where((self.var.resId_restricted == 0) * (self.var.waterBodyTyp_unchanged == 2), 0, self.var.reservoir_command_areas_wwt))
                         self.var.segmentArea_wwt = np.where(self.var.reservoir_command_areas_wwt > 0,
                                                         npareatotal(self.var.cellArea,
                                                                     self.var.reservoir_command_areas_wwt), self.var.cellArea)

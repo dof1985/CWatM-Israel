@@ -469,14 +469,14 @@ class groundwater_modflow:
             
             
             # Defining potential leakage under rivers and lakes or reservoirs - maps are cwatm resolution
-            leakageriver_factor = 0
+            self.var.leakageriver_factor = 0
             if 'leakageriver_permea' in binding:
                 self.var.leakageriver_factor = loadmap('leakageriver_permea')  # in m/day
             if verboseGW:                
                 print('=> Leakage under rivers is ', self.var.leakageriver_factor, ' m/day')
-            leakagelake_factor = 0
-            if 'leakagelake_permea' in binding:
-                self.var.leakagelake_factor = loadmap('leakagelake_permea')  # in m/day
+            #leakagelake_factor = 0
+            #if 'leakagelake_permea' in binding:
+            #    self.var.leakagelake_factor = loadmap('leakagelake_permea')  # in m/day
             
             if verboseGW:
                 print('=> Average leakage under lakes/reservoirs is ', np.nanmean(self.var.leakageriver_factor), ' m/day')

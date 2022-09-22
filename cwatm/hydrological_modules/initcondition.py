@@ -65,6 +65,17 @@ class initcondition(object):
 
         return Crops, Crops_names
 
+    def reservoir_settings(self, xl_settings_file_path):
+        pd = importlib.import_module("pandas", package=None)
+        df = pd.read_excel(xl_settings_file_path, sheet_name='Reservoir_settings')
+        
+        reservoir_settings = {}
+        cols =['resYear', 'resType', 'resArea', 'resVolume', 'waterQualityLow', 'resReleaseLimit', 'resInfiltrationRate']
+        
+        for resid in df['resID'].unique():
+            reservoir_settings[resid] = df[df['resID'] == resid][cols].to_numpy()
+        return reservoir_settings
+        
     def reservoir_transfers(self, xl_settings_file_path):
         pd = importlib.import_module("pandas", package=None)
         df = pd.read_excel(xl_settings_file_path, sheet_name='Reservoir_transfers')
@@ -245,6 +256,12 @@ class initcondition(object):
         # lakes & reservoirs
 
         if checkOption('includeWaterBodies'):
+        
+            xl_settings_file_path = cbinding('Excel_settings_file')
+            #['resYear', 'resType', 'resArea', 'resVolume', 'waterQualityLow', 'resReleaseLimit', 'resInfiltrationRate']
+            self.var.resLakeSettings = self.reservoir_settings(xl_settings_file_path)
+            
+            
             if returnBool('useSmallLakes'):
                 Var1 = ["smalllakeInflow","smalllakeStorage","smalllakeOutflow"]
                 Var2 = ["smalllakeInflowOld","smalllakeVolumeM3","smalllakeOutflow"]

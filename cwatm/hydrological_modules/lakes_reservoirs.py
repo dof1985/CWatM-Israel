@@ -246,15 +246,53 @@ class lakes_reservoirs(object):
             # dismiss water bodies that are not a subcatchment of an outlet
             sub = subcatchment1(self.var.dirUp, self.var.waterBodyOut, self.var.UpArea1)
             self.var.waterBodyID = np.where(self.var.waterBodyID == sub, sub, 0)
-
+            
+            self.var.includeWastewater = False
+            if "includeWastewater" in option:
+                self.var.includeWastewater = checkOption('includeWastewater')
+            
+            ## load data
+            
+            for resid in np.unique(self.var.waterBodyID)[1:]:
+               self.var.resYear = globals.inZero.copy()
+               self.var.waterBodyTyp = globals.inZero.copy()
+               self.var.waterBodyTyp_unchanged = globals.inZero.copy()
+               self.var.lakeArea = globals.inZero.copy()
+               self.var.resVolume = globals.inZero.copy()
+               self.var.resId_restricted = globals.inZero.copy()
+               self.var.leakagelake_factor = globals.inZero.copy()
+               
+               
+               self.var.resYear[self.var.waterBodyID == resid] = self.var.resLakeSettings[resid][0][0]
+               self.var.waterBodyTyp[self.var.waterBodyID == resid] = self.var.resLakeSettings[resid][0][1].astype(np.int64)
+               self.var.waterBodyTyp_unchanged = self.var.waterBodyTyp
+               self.var.lakeArea[self.var.waterBodyID == resid] = self.var.resLakeSettings[resid][0][2] * 1000000 # given in km2 converted to m2
+               self.var.resVolume[self.var.waterBodyID == resid] = self.var.resLakeSettings[resid][0][3] * 1000000 # given in Mm3; converted to m3
+               if self.var.includeWastewater:
+                self.var.resId_restricted[self.var.waterBodyID == resid] = self.var.resLakeSettings[resid][0][4]
+                
+               
+               self.var.reservoirOutflowLimitC = []
+               self.var.reservoirOutflowLimitC.append(self.var.resLakeSettings[resid][0][5])
+               
+               if self.var.modflow:
+                self.var.leakagelake_factor[self.var.waterBodyID == resid] = self.var.resLakeSettings[resid][0][5]
+            if self.var.includeWastewater:
+                if((self.var.resId_restricted == 0).all()):
+                    waterBody = loadmap('waterBodyID').astype(int)
+                    res_restricted = []
+                    for i in self.var.wastewater_to_reservoirs.keys():
+                        res_restricted.append(self.var.wastewater_to_reservoirs[i])
+                    self.var.resId_restricted = np.where(np.in1d(waterBody, np.unique(res_restricted)), waterBody, 0)
+            #['resYear', 'resType', 'resArea', 'resVolume', 'waterQualityLow', 'resReleaseLimit', 'resInfiltrationRate']
+            #self.var.resLakeSettings
+            #for(
             # Create a buffer around water bodies as command areas for lakes and reservoirs
             if checkOption('includeWaterDemand'):
                 waterBody_UnRestricted = self.var.waterBodyID.copy()
                 
-                self.var.includeWastewater = False
-                if "includeWastewater" in option:
-                    self.var.includeWastewater = checkOption('includeWastewater')
-                    
+                
+                '''
                 # if wastewater is included - search for user defined reservoirs_with_use_restrictions
                 # if there is no such input - assume that only reservoirs that recieves wastewater are with restricted use
                 if self.var.includeWastewater:
@@ -268,6 +306,7 @@ class lakes_reservoirs(object):
                         self.var.resId_restricted = np.where(np.in1d(waterBody, np.unique(res_restricted)), waterBody, 0)
                 else:
                     self.var.resId_restricted = globals.inZero.copy()
+                '''
                 if self.var.includeWastewater:
                     waterBody_UnRestricted = np.where(np.in1d(waterBody_UnRestricted, self.var.resId_restricted), 0, waterBody_UnRestricted)
                 rectangular = 1
@@ -299,10 +338,10 @@ class lakes_reservoirs(object):
             self.var.waterBodyID_C = np.compress(self.var.compress_LR, self.var.waterBodyID)
 
             # First year that the reservoir is operating
-            self.var.resYear = loadmap('waterBodyYear')
+            #self.var.resYear = loadmap('waterBodyYear')
             self.var.resYearC = np.compress(self.var.compress_LR, self.var.resYear)
 
-            self.var.waterBodyTyp = loadmap('waterBodyTyp').astype(np.int64)
+            #self.var.waterBodyTyp = loadmap('waterBodyTyp').astype(np.int64)
             # Flag if res type-4 are used
             self.var.includeType4 = False
             if (self.var.waterBodyTyp == 4).any():
@@ -311,7 +350,8 @@ class lakes_reservoirs(object):
             self.var.waterBodyTypC = np.compress(self.var.compress_LR, self.var.waterBodyTyp)
             self.var.waterBodyTypC = np.where(self.var.waterBodyOutC > 0, self.var.waterBodyTypC.astype(np.int64), 0)
 
-            self.var.resVolumeC = np.compress(self.var.compress_LR, loadmap('waterBodyVolRes')) * 1000000
+            #self.var.resVolumeC = np.compress(self.var.compress_LR, loadmap('waterBodyVolRes')) * 1000000
+            self.var.resVolumeC = np.compress(self.var.compress_LR, self.var.resVolume)
             # changing reservoirs type 2 and 3 to lakes if volumes are zero:
             self.var.waterBodyTypC = np.where(self.var.resVolumeC > 0., self.var.waterBodyTypC,
                                               np.where(self.var.waterBodyTypC == 2, 1, self.var.waterBodyTypC))
@@ -324,7 +364,7 @@ class lakes_reservoirs(object):
             # Lakes
 
             # Surface area of each lake [m2]
-            self.var.lakeArea = loadmap('waterBodyArea') * 1000 * 1000  # mult with 1000000 to convert from km2 to m2
+            #self.var.lakeArea = loadmap('waterBodyArea') * 1000 * 1000  # mult with 1000000 to convert from km2 to m2
             self.var.lakeAreaC = np.compress(self.var.compress_LR, self.var.lakeArea)
 
             # lake discharge at outlet to calculate alpha: parameter of channel width, gravity and weir coefficient
@@ -715,17 +755,12 @@ class lakes_reservoirs(object):
             # MODIFIED DOR FRIDMAN 
             # limit res. outflows to reservoir with water level > limit_to_resOutflows
             # limit_to_resOutflows is defined relative to res. Volume
-            if "limit_to_resOutflows" in binding:
-                reservoirOutflowLimit = loadmap('limit_to_resOutflows')
+            #if "limit_to_resOutflows" in binding:
+                #reservoirOutflowLimit = loadmap('limit_to_resOutflows')
                 # load map of outflow limit np.compress(self.var.compress_LR, self.var.waterBodyOut)
-                reservoirOutflowLimitC = np.compress(self.var.compress_LR,
-                                                     globals.inZero.copy() + reservoirOutflowLimit)
-                # compress to lake&res data
-                reservoirOutflowLimitMask = np.where(reservoirOutflowLimitC < self.var.reservoirFillC, 1, 0)
-                # Create mask for limit out flow: 1 allow out flow (in case fill > limit) 
-            else:
-                reservoirOutflowLimitMask = np.compress(self.var.compress_LR, globals.inZero.copy() + 1)
-
+            
+            reservoirOutflowLimitMask = np.where(self.var.reservoirOutflowLimitC < self.var.reservoirFillC, 1, 0)
+             
             reservoirOutflow1 = np.minimum(self.var.minQC, self.var.reservoirStorageM3C * self.var.InvDtSec)
             # Reservoir outflow [m3/s] if ReservoirFill is nearing absolute minimum. 
 

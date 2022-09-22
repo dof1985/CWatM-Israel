@@ -379,6 +379,7 @@ class waterdemand_wastewater(object):
             idIndex = np.where(self.var.wwtIdsOrdered == wwt_id)[0].item()
             # check year established
             
+            
             simulatedYear =  globals.dateVar['currDate'].year
             
             #if self.var.wwtYearC[idIndex] > simulatedYear:
@@ -428,53 +429,55 @@ class waterdemand_wastewater(object):
             # update storage with evaporation
             self.var.wwtStorage[wwt_id] -= wwtEvapArray
             
+            self.var.wwtSewerTreatedC[idIndex] = 0
+            
             # handle storage 
             if self.var.extensive[idIndex]:
-                
+      
                 #print(idIndex)
                 #print("last Storage Ext" + str(np.round(self.var.wwtStorage[idIndex][-1], 0)))
                 # extensive
                 # calculate remainStorage in pool 0
-                remainStorage0 = self.var.poolVolume_extensive[idIndex] - self.var.wwtStorage[wwt_id][0]
+                remainStorage0 = np.maximum(self.var.poolVolume_extensive[idIndex] - self.var.wwtStorage[wwt_id][0], 0.)
                 
                 # calculate volume to add to storage0 and add to storage1
                 addToStorage0 = np.minimum(remainStorage0, self.var.wwtSewerToTreatmentC[idIndex])
                 addToStorage1 =  self.var.wwtSewerToTreatmentC[idIndex] - addToStorage0
-                    
+
                 # add to storage
                 self.var.wwtStorage[wwt_id][0] += addToStorage0
                 
                 # if reservoir routing is off
-                self.var.wwtSewerTreatedC[idIndex] = 0
                 if addToStorage1 > 0:
                     #last storage to TreatedC [m3] - if all treatment pools are with water and more capacity is required
                     self.var.wwtSewerTreatedC[idIndex] = self.var.wwtStorage[wwt_id][-1]
                     
                     # update storage - each element i to i+1; eliminate last [m3] 
                     self.var.wwtStorage[wwt_id][1:] = self.var.wwtStorage[wwt_id][0:-1]
-                    
                     # move counter values respecitvely
                     self.var.extensive_counter[wwt_id][1:] = self.var.extensive_counter[wwt_id][0:-1]
                     
                     # update storage - element 0 is new collected [m3]
                     self.var.wwtStorage[wwt_id][0] = addToStorage1
-                
-                
+
                 cond = self.var.extensive_counter[wwt_id] >= (self.var.wwtTimeC[idIndex] - 1)
+  
                 # empty pool if time in active pool exceeds treatment time
                 if cond.any():
-                    self.var.wwtSewerTreatedC[idIndex] =  np.nansum(self.var.wwtStorage[wwt_id][cond])
-                
+                    
+                    self.var.wwtSewerTreatedC[idIndex] +=  np.nansum(self.var.wwtStorage[wwt_id][cond])
+
                     # update storage
                     self.var.wwtStorage[wwt_id] = np.where(cond, 0., self.var.wwtStorage[wwt_id])
-                
+
+                    #self.var.extensive_counter[wwt_id] += (cond * 1)
                 # active treatement pools are those which are not receieving water inflows. Ther are being emptied (e.g., water are used after the defined treatment days)
                 # count days with positive water volume in active treatement pools
                 cond = self.var.wwtStorage[wwt_id][1:] > 0
+      
                 if cond.any():
                     
                     self.var.extensive_counter[wwt_id][1:] += (cond * 1)
-                    
                     self.var.extensive_counter[wwt_id][1:] = np.where(np.logical_not(cond), 0, self.var.extensive_counter[wwt_id][1:])
                 '''
                 Example from Sorek - print for water quality code dev.
@@ -484,6 +487,7 @@ class waterdemand_wastewater(object):
                     print(self.var.extensive_counter[idIndex])
                     print(self.var.wwtSewerTreatedC[idIndex])
                 '''
+                self.var.wwtInTreatment[self.var.wwtID == wwt_id] = np.nansum(self.var.wwtStorage[wwt_id])  
             else:
                 #last storage to TreatedC [m3]         
                 self.var.wwtSewerTreatedC[idIndex] = self.var.wwtStorage[wwt_id][-1]
@@ -526,19 +530,19 @@ class waterdemand_wastewater(object):
                 # treated water are being discharged to overflow point
                 overflow_temp += overflowMask * self.var.wwtSewerTreatedC[idIndex]
                 self.var.wwtTreatedOverflowC[idIndex] = self.var.wwtSewerTreatedC[idIndex]
-            
+              
             elif np.invert(wwt_id in self.var.wastewater_to_reservoirs.keys()):
-                
+        
                 # account for exported treated water 
                 self.var.wwtExportedTreatedC[idIndex] = self.var.wwtSewerTreatedC[idIndex] * toResManage
                 self.var.wwtSewerTreatedC[idIndex] -= self.var.wwtExportedTreatedC[idIndex]
-                    
+
                 # treated water are being discharged to overflow point
                 overflow_temp += overflowMask * self.var.wwtSewerTreatedC[idIndex]
-                #print(wwt_id)
-                #print(np.nansum(overflow_temp))
                 self.var.wwtTreatedOverflowC[idIndex] = self.var.wwtSewerTreatedC[idIndex]
                 self.var.wwtSewerTreatedC[idIndex] -= self.var.wwtTreatedOverflowC[idIndex]
+               
+
                 
             else:
                 # treated water are being sent to one or more reservoirs. If one reservoir, all water sent until it is full, access water are added to OverflowOut
@@ -554,14 +558,14 @@ class waterdemand_wastewater(object):
                 self.var.wwtResIDTemp_compress = np.in1d(self.var.waterBodyOut, np.compress(srch, self.var.wastewater_to_reservoirs[wwt_id]))
                     
                 self.var.wwtResIDC = np.compress(self.var.wwtResIDTemp_compress, self.var.waterBodyOut)
-                self.var.wwtResTypC = np.compress(self.var.wwtResIDTemp_compress, loadmap('waterBodyTyp').astype(np.int64))
-                self.var.wwtResYearC = np.compress(self.var.wwtResIDTemp_compress, loadmap('waterBodyYear'))
+                self.var.wwtResTypC = np.compress(self.var.wwtResIDTemp_compress, self.var.waterBodyTyp_unchanged)
+                self.var.wwtResYearC = np.compress(self.var.wwtResIDTemp_compress, self.var.resYear)
                     
                 # do not alow reservoir use if their type ids is zero (e.g., wetland) or id they have not been yet established
                 self.var.wwtResIDC =  np.where(self.var.wwtResTypC == 0, 0,  np.where(self.var.wwtResYearC > simulatedYear, 0,  self.var.wwtResIDC))
                     
                 # calculate allocation weights
-                resVolumeC = np.compress(self.var.wwtResIDTemp_compress, loadmap('waterBodyVolRes')) * 1000000
+                resVolumeC = np.compress(self.var.wwtResIDTemp_compress, self.var.resVolume)
                     
                 resVolumeLeftC = np.minimum(np.maximum(resVolumeC - np.compress(self.var.wwtResIDTemp_compress, self.var.lakeResStorage), 0.), resVolumeC)
                    
@@ -577,9 +581,10 @@ class waterdemand_wastewater(object):
                 # get location of res
                 #wwtResindex = self.var.wwtResID_LRC == wwt_id
                 wwtResindex = np.in1d(self.var.waterBodyOutC, self.var.wastewater_to_reservoirs[wwt_id])
-                sendToRes = self.var.wwtSewerTreatedC[idIndex] * resAllocWeights
-                    
 
+                sendToRes = self.var.wwtSewerTreatedC[idIndex] * resAllocWeights
+ 
+    
                 self.var.wwtSentToResC[wwtResindex] = np.where((sendToRes - resVolumeLeftC) >= 0, resVolumeLeftC, sendToRes)
                 # split water and calcualte overflow in reservoirs - continute here ! error! - something doesnot work with res overflow - it is not written to the layer
                 # see lines 286 -295 for clues
@@ -587,18 +592,22 @@ class waterdemand_wastewater(object):
                 # below it was originaly assignes (=); I suspect it overwritten
                     
                 self.var.wwtSewerResOverflowC[wwtResindex] = sendToRes - self.var.wwtSentToResC[wwtResindex]
-                  
+                
+                
                 #self.var.wwtSewerResOverflowC[wwtResindex] = np.where(self.var.wwtSewerResOverflowC[wwtResindex] < 0, resVolumeLeftC, self.var.wwtSewerResOverflowC[wwtResindex])
                 #self.var.wwtSentToResC[wwtResindex] -= self.var.wwtSewerResOverflowC[wwtResindex]
                   
                 # update overflow
                     
                 overflow_temp += overflowMask * np.nansum(self.var.wwtSewerResOverflowC[wwtResindex])
+      
                 wwtSentToRes = np.where(np.in1d(np.compress(self.var.compress_LR, self.var.waterBodyOut), self.var.wwtResIDC), self.var.wwtSentToResC, 0.)
                 addToSend = globals.inZero.copy()
                 np.put(addToSend, self.var.decompress_LR, wwtSentToRes)
-                    
+
+                
                 self.var.wwtSentToRes += addToSend 
+
                 # get relevant reservoirs ids and their fill status. create an output status to save wwtSentToRes
                 # split treated between reservoirs
                 # check for access water - if no allocate, if yes - update: OverflowOut, SewerResOverflowC
