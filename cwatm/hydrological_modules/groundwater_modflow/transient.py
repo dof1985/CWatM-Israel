@@ -722,22 +722,27 @@ class groundwater_modflow:
             self.var.modfPumpingM_actual = globals.inZero.copy()
            
             # calculate groundwater storage available for CWATM
-            self.gwavailable_n_lyrs = head.copy()
-            for lyr in range(nlay):
-                satFrac = self.calcSaturatedCellFraction(lyr = lyr, head = head)
-                satFrac_min = self.var.availableGWStorageFraction * self.modflow.basin
-                head_min = self.layer_boundaries[lyr + 1] + satFrac_min * (self.layer_boundaries[lyr] - self.layer_boundaries[lyr + 1])
-                
-                self.gwavailable_n_lyrs[lyr] =  (self.layer_boundaries[lyr] - self.layer_boundaries[lyr + 1]) * ((self.s_stor[lyr] * np.maximum(head[lyr] * satFrac - head_min * satFrac_min ,0)) + (self.s_yield[lyr] * np.maximum(satFrac - satFrac_min, 0)) * (self.confinedAquifer_flags[lyr] > 0))
-                self.gwavailable_n_lyrs[lyr] = np.where(self.gwavailable_n_lyrs[lyr]  < 0, 0., self.gwavailable_n_lyrs[lyr])
-                
-            self.var.groundwater_storage_available = compressArray(self.modflow2CWATM(np.nansum(self.gwavailable_n_lyrs  * self.wells_mask, axis = 0)))  # used in water demand module then
-            self.groundwater_storage_available = np.nansum(self.gwavailable_n_lyrs * self.wells_mask, axis = 0)
             
+            if self.var.GW_pumping:
+                self.gwavailable_n_lyrs = head.copy()
+                for lyr in range(nlay):
+                    satFrac = self.calcSaturatedCellFraction(lyr = lyr, head = head)
+                    satFrac_min = self.var.availableGWStorageFraction * self.modflow.basin
+                    head_min = self.layer_boundaries[lyr + 1] + satFrac_min * (self.layer_boundaries[lyr] - self.layer_boundaries[lyr + 1])
+                
+                    self.gwavailable_n_lyrs[lyr] =  (self.layer_boundaries[lyr] - self.layer_boundaries[lyr + 1]) * ((self.s_stor[lyr] * np.maximum(head[lyr] * satFrac - head_min * satFrac_min ,0)) + (self.s_yield[lyr] * np.maximum(satFrac - satFrac_min, 0)) * (self.confinedAquifer_flags[lyr] > 0))
+                    self.gwavailable_n_lyrs[lyr] = np.where(self.gwavailable_n_lyrs[lyr]  < 0, 0., self.gwavailable_n_lyrs[lyr])
+                
+                self.var.groundwater_storage_available = compressArray(self.modflow2CWATM(np.nansum(self.gwavailable_n_lyrs  * self.wells_mask, axis = 0)))  # used in water demand module then
+                self.groundwater_storage_available = np.nansum(self.gwavailable_n_lyrs * self.wells_mask, axis = 0)
             
+            else:
+                self.var.groundwater_storage_available = self.var.groundwater_storage_total.copy()
+                self.groundwater_storage_available = np.nansum(self.groundwater_storage_n_layer, axis = 0).copy()
             # self.modflowGroupByCWATM(self.groundwater_storage_available) --> SEE IF CAN BE FIXED
             self.gwAvail_weights = np.minimum(divideArrays(self.groundwater_storage_available, self.CWATM2modflow(decompress(self.var.groundwater_storage_available))), 1.0)
             
+                
             # permeability need to be translated into CWatM map to caompute leakage from surface water bodies & to condition infiltration into aquifer (e.g., replace under soil impervious surface share
             self.var.permeability = compressArray(self.modflow2CWATM(self.permeability[0])) * self.coefficient
             self.var.permeability_v = compressArray(self.modflow2CWATM(self.permeability_v[0])) * self.coefficient
@@ -862,10 +867,9 @@ class groundwater_modflow:
             wellsMask = (np.nansum(self.wells_mask, axis = 0) > 0)
             groundwater_abstraction2 = np.array([groundwater_abstraction  * wellsMask] * nlay_dyn) 
             
-            
             # self.modflowGroupByCWATM(self.groundwater_storage_available) -> check if can be fixed
             self.gwAvail_weights = np.minimum(divideArrays(self.groundwater_storage_available, self.CWATM2modflow(decompress(self.var.groundwater_storage_available))), 1.0)
-     
+
             groundwater_abstraction2 = groundwater_abstraction2 * self.gwAvail_weights
             
             # correct groundwater discrepancy
@@ -929,21 +933,25 @@ class groundwater_modflow:
             satFrac = self.calcSaturatedCellFraction(lyr = lyr, head = head)
             self.groundwater_storage_n_layer[lyr] = (self.layer_boundaries[lyr] - self.layer_boundaries[lyr + 1]) * satFrac * (self.s_stor[lyr] * head[lyr] + self.s_yield[lyr] * (self.confinedAquifer_flags[lyr] > 0))
         self.var.groundwater_storage_total = compressArray(self.modflow2CWATM(np.nansum(self.groundwater_storage_n_layer, axis = 0)))  
-
-        self.gwavailable_n_lyrs = head.copy()
-        for lyr in range(nlay_dyn):
-            satFrac = self.calcSaturatedCellFraction(lyr = lyr, head = head)
-            satFrac_min = self.var.availableGWStorageFraction
-            head_min = self.layer_boundaries[lyr + 1] + satFrac_min * (self.layer_boundaries[lyr] - self.layer_boundaries[lyr + 1])
-
-            self.gwavailable_n_lyrs[lyr] =  (self.layer_boundaries[lyr] - self.layer_boundaries[lyr + 1]) * ((self.s_stor[lyr] * np.maximum(head[lyr] * satFrac - head_min * satFrac_min ,0)) + (self.s_yield[lyr] * np.maximum(satFrac - satFrac_min, 0)) * (self.confinedAquifer_flags[lyr] > 0))
-            self.gwavailable_n_lyrs[lyr] = np.where(self.gwavailable_n_lyrs[lyr] < 0, 0. , self.gwavailable_n_lyrs[lyr])
         
-        wellsMask = (np.nansum(self.wells_mask, axis = 0) > 0)
-        # calculate groundwater storage available for MODFLOW & gwAvailable allocation weights
-        self.groundwater_storage_available = np.nansum(self.gwavailable_n_lyrs  * wellsMask, axis = 0)
-        self.var.groundwater_storage_available = compressArray(self.modflow2CWATM(np.nansum(self.gwavailable_n_lyrs  * wellsMask, axis = 0)))  # used in water demand module then
+        if self.var.GW_pumping:
+            self.gwavailable_n_lyrs = head.copy()
+            for lyr in range(nlay_dyn):
+                satFrac = self.calcSaturatedCellFraction(lyr = lyr, head = head)
+                satFrac_min = self.var.availableGWStorageFraction
+                head_min = self.layer_boundaries[lyr + 1] + satFrac_min * (self.layer_boundaries[lyr] - self.layer_boundaries[lyr + 1])
 
+                self.gwavailable_n_lyrs[lyr] =  (self.layer_boundaries[lyr] - self.layer_boundaries[lyr + 1]) * ((self.s_stor[lyr] * np.maximum(head[lyr] * satFrac - head_min * satFrac_min ,0)) + (self.s_yield[lyr] * np.maximum(satFrac - satFrac_min, 0)) * (self.confinedAquifer_flags[lyr] > 0))
+                self.gwavailable_n_lyrs[lyr] = np.where(self.gwavailable_n_lyrs[lyr] < 0, 0. , self.gwavailable_n_lyrs[lyr])
+         
+            
+            wellsMask = (np.nansum(self.wells_mask, axis = 0) > 0)
+            # calculate groundwater storage available for MODFLOW & gwAvailable allocation weights
+            self.groundwater_storage_available = np.nansum(self.gwavailable_n_lyrs  * wellsMask, axis = 0)
+            self.var.groundwater_storage_available = compressArray(self.modflow2CWATM(np.nansum(self.gwavailable_n_lyrs  * wellsMask, axis = 0)))  # used in water demand module then
+        else:
+            self.var.groundwater_storage_available = self.var.groundwater_storage_total.copy()
+            self.groundwater_storage_available = np.nansum(self.groundwater_storage_n_layer, axis = 0).copy()
         
         #assert self.permeability.ndim == 3
         # computing the groundwater outflow by re-computing water outflowing the aquifer through the DRAIN ModFlow package

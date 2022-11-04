@@ -252,31 +252,32 @@ class lakes_reservoirs(object):
                 self.var.includeWastewater = checkOption('includeWastewater')
             
             ## load data
-            
+            self.var.resYear = globals.inZero.copy()
+            self.var.waterBodyTyp = globals.inZero.copy()
+            self.var.waterBodyTyp_unchanged = globals.inZero.copy()
+            self.var.lakeArea = globals.inZero.copy()
+            self.var.resVolume = globals.inZero.copy()
+            self.var.resId_restricted = globals.inZero.copy()
+            self.var.leakagelake_factor = globals.inZero.copy()
+       
             for resid in np.unique(self.var.waterBodyID)[1:]:
-               self.var.resYear = globals.inZero.copy()
-               self.var.waterBodyTyp = globals.inZero.copy()
-               self.var.waterBodyTyp_unchanged = globals.inZero.copy()
-               self.var.lakeArea = globals.inZero.copy()
-               self.var.resVolume = globals.inZero.copy()
-               self.var.resId_restricted = globals.inZero.copy()
-               self.var.leakagelake_factor = globals.inZero.copy()
-               
-               
+
                self.var.resYear[self.var.waterBodyID == resid] = self.var.resLakeSettings[resid][0][0]
                self.var.waterBodyTyp[self.var.waterBodyID == resid] = self.var.resLakeSettings[resid][0][1].astype(np.int64)
                self.var.waterBodyTyp_unchanged = self.var.waterBodyTyp
                self.var.lakeArea[self.var.waterBodyID == resid] = self.var.resLakeSettings[resid][0][2] * 1000000 # given in km2 converted to m2
                self.var.resVolume[self.var.waterBodyID == resid] = self.var.resLakeSettings[resid][0][3] * 1000000 # given in Mm3; converted to m3
+
                if self.var.includeWastewater:
-                self.var.resId_restricted[self.var.waterBodyID == resid] = self.var.resLakeSettings[resid][0][4]
+                self.var.resId_restricted[self.var.waterBodyID == resid] = self.var.resLakeSettings[resid][0][4] * resid
                 
                
                self.var.reservoirOutflowLimitC = []
                self.var.reservoirOutflowLimitC.append(self.var.resLakeSettings[resid][0][5])
                
                if self.var.modflow:
-                self.var.leakagelake_factor[self.var.waterBodyID == resid] = self.var.resLakeSettings[resid][0][5]
+                self.var.leakagelake_factor[self.var.waterBodyID == resid] = self.var.resLakeSettings[resid][0][6]
+            '''
             if self.var.includeWastewater:
                 if((self.var.resId_restricted == 0).all()):
                     waterBody = loadmap('waterBodyID').astype(int)
@@ -284,6 +285,7 @@ class lakes_reservoirs(object):
                     for i in self.var.wastewater_to_reservoirs.keys():
                         res_restricted.append(self.var.wastewater_to_reservoirs[i])
                     self.var.resId_restricted = np.where(np.in1d(waterBody, np.unique(res_restricted)), waterBody, 0)
+            '''
             #['resYear', 'resType', 'resArea', 'resVolume', 'waterQualityLow', 'resReleaseLimit', 'resInfiltrationRate']
             #self.var.resLakeSettings
             #for(
@@ -352,6 +354,7 @@ class lakes_reservoirs(object):
 
             #self.var.resVolumeC = np.compress(self.var.compress_LR, loadmap('waterBodyVolRes')) * 1000000
             self.var.resVolumeC = np.compress(self.var.compress_LR, self.var.resVolume)
+
             # changing reservoirs type 2 and 3 to lakes if volumes are zero:
             self.var.waterBodyTypC = np.where(self.var.resVolumeC > 0., self.var.waterBodyTypC,
                                               np.where(self.var.waterBodyTypC == 2, 1, self.var.waterBodyTypC))
@@ -760,7 +763,7 @@ class lakes_reservoirs(object):
                 # load map of outflow limit np.compress(self.var.compress_LR, self.var.waterBodyOut)
             
             reservoirOutflowLimitMask = np.where(self.var.reservoirOutflowLimitC < self.var.reservoirFillC, 1, 0)
-             
+
             reservoirOutflow1 = np.minimum(self.var.minQC, self.var.reservoirStorageM3C * self.var.InvDtSec)
             # Reservoir outflow [m3/s] if ReservoirFill is nearing absolute minimum. 
 
