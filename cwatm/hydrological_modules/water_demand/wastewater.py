@@ -281,25 +281,24 @@ class waterdemand_wastewater(object):
         self.var.maskIndustryCollection = 1 + globals.inZero.copy()
         
         for wwtid in self.var.wwtIdsOrdered:
+
             i = np.in1d(self.var.wwtIdsOrdered, wwtid)
             self.var.wwtVolC.append(self.var.wwt_def[wwtid][int(annual_wwtpIdx[i])][2])
             self.var.wwtTimeC.append(self.var.wwt_def[wwtid][int(annual_wwtpIdx[i])][3]) 
             self.var.minHRTC.append(np.maximum(self.var.wwt_def[wwtid][int(annual_wwtpIdx[i])][8], 0.001))
             # if no management data - assume 0 -> try to send to reservoir, and discharge if no free volume
             mng = self.var.wwt_def[wwtid][int(annual_wwtpIdx[i])][5]
-            self.var.toResManageC.append(int(np.where(np.isnan(mng), 0., mng)))
-            
+            self.var.toResManageC.append(float(np.where(np.isnan(mng), 0., mng)))
             # sector collection masks
             self.var.maskDomesticCollection = np.where(self.var.wwtColArea == wwtid, self.var.wwt_def[wwtid][int(annual_wwtpIdx[i])][6], self.var.maskDomesticCollection)
             self.var.maskIndustryCollection = np.where(self.var.wwtColArea == wwtid, self.var.wwt_def[wwtid][int(annual_wwtpIdx[i])][7], self.var.maskIndustryCollection)
            
-            
         self.var.wwtVolC = np.array(self.var.wwtVolC)
         self.var.wwtTimeC = np.array(self.var.wwtTimeC)
         self.var.minHRTC = np.array(self.var.minHRTC)
         self.var.toResManageC = np.array(self.var.toResManageC)
         self.var.wwtIdsOrdered = np.array(self.var.wwtIdsOrdered)
-        
+       
         
         ### Extensive WWTP ####
         # Identify extensive systems - if timeLag >= 5
@@ -520,7 +519,7 @@ class waterdemand_wastewater(object):
                 dischargeTreatedWaterBool = True
             
             
-            if (toResManage > 1) | (toResManage < 0):
+            if (toResManage > 1) | (toResManage < 0 and toResManage != -1):
                 msg = "Error: unexpected value in 'wwtToResManagement'"
                 raise CWATMFileError(msg)
             
@@ -530,9 +529,9 @@ class waterdemand_wastewater(object):
                 # treated water are being discharged to overflow point
                 overflow_temp += overflowMask * self.var.wwtSewerTreatedC[idIndex]
                 self.var.wwtTreatedOverflowC[idIndex] = self.var.wwtSewerTreatedC[idIndex]
-              
+            
+            
             elif np.invert(wwt_id in self.var.wastewater_to_reservoirs.keys()):
-        
                 # account for exported treated water 
                 self.var.wwtExportedTreatedC[idIndex] = self.var.wwtSewerTreatedC[idIndex] * toResManage
                 self.var.wwtSewerTreatedC[idIndex] -= self.var.wwtExportedTreatedC[idIndex]
@@ -590,7 +589,6 @@ class waterdemand_wastewater(object):
                 # see lines 286 -295 for clues
 
                 # below it was originaly assignes (=); I suspect it overwritten
-                    
                 self.var.wwtSewerResOverflowC[wwtResindex] = sendToRes - self.var.wwtSentToResC[wwtResindex]
                 
                 
@@ -642,12 +640,13 @@ class waterdemand_wastewater(object):
         self.var.lakeResStorageC += self.var.wwtSentToResC_LR 
         self.var.reservoirStorageM3C += self.var.wwtSentToResC_LR 
         #resStorageC += self.var.wwtSentToResC_LR
-                
+        '''       
         sendToResOverflow_LR = np.where((self.var.lakeResStorageC - self.var.resVolumeC) > 0, self.var.lakeResStorageC - self.var.resVolumeC, 0.)
         addTowwtSewerResOverflow = globals.inZero.copy()
         np.put(addTowwtSewerResOverflow, self.var.decompress_WWT, sendToResOverflow_LR)
         self.var.wwtSewerResOverflow += addTowwtSewerResOverflow
         self.var.wwtOverflowOut += addTowwtSewerResOverflow
+        '''
         
         '''
         # correct urbanlekage and wastewater collection from deleted wwtp and send to overflow.
@@ -670,17 +669,17 @@ class waterdemand_wastewater(object):
         
         
         
-        
+        '''
         # UPDATE wwtSendToRes
         self.var.wwtSentToRes -= addTowwtSewerResOverflow
-                
+            
         # UPDATE LAKERESSTORAGE
         self.var.lakeVolumeM3C -= sendToResOverflow_LR
         self.var.lakeStorageC -= sendToResOverflow_LR
         self.var.lakeResStorageC -= sendToResOverflow_LR
         self.var.reservoirStorageM3C -= sendToResOverflow_LR
         #resStorageC -= sendToResOverflow_LR
-        
+        '''  
         printError = False
         if (printError):
             # print balance
