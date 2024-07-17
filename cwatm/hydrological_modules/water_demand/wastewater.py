@@ -193,7 +193,8 @@ class waterdemand_wastewater(object):
             self.var.wwtSewerToTreatmentC = np.compress(self.var.compress_WWT, globals.inZero.copy())
             self.var.wwtSewerOverflowC = np.compress(self.var.compress_WWT, globals.inZero.copy())
             # use self.var.decompress_LR to decompress
-            self.var.wwtSewerResOverflowC = np.compress(self.var.compress_LR, globals.inZero.copy())
+            #self.var.wwtSewerResOverflowC = np.compress(self.var.compress_LR, globals.inZero.copy())
+            self.var.wwtSewerResOverflowC = np.compress(self.var.compress_WWT, globals.inZero.copy())
             self.var.wwtTreatedOverflowC = np.compress(self.var.compress_WWT, globals.inZero.copy())
             self.var.wwtSentToResC = np.compress(self.var.compress_LR, globals.inZero.copy())
             # maybe another approach?? -> compress and decompress?
@@ -567,37 +568,38 @@ class waterdemand_wastewater(object):
                 resVolumeC = np.compress(self.var.wwtResIDTemp_compress, self.var.resVolume)
                     
                 resVolumeLeftC = np.minimum(np.maximum(resVolumeC - np.compress(self.var.wwtResIDTemp_compress, self.var.lakeResStorage), 0.), resVolumeC)
-                   
-                resAllocWeights = divideValues(resVolumeLeftC, npareatotal(resVolumeLeftC, self.var.wwtResIDC > 0)) * (self.var.wwtResIDC > 0)
                 
-                # Do not allow all reservoir to be zero - split wastewater proportionally to total storage
-                if np.nansum(resAllocWeights) == 0:
-                    resAllocWeights = divideValues(resVolumeC, npareatotal(resVolumeC, self.var.wwtResIDC > 0)) * (self.var.wwtResIDC > 0)
-                        
-                    
-                    
-                #print(np.nansum(self.var.wwtSewerTreatedC[idIndex]))
-                # get location of res
-                #wwtResindex = self.var.wwtResID_LRC == wwt_id
+                treatedSewer = self.var.wwtSewerTreatedC[idIndex]
+                #### Iterate to allocate as much water as possible to res ####
                 wwtResindex = np.in1d(self.var.waterBodyOutC, self.var.wastewater_to_reservoirs[wwt_id])
-
-                sendToRes = self.var.wwtSewerTreatedC[idIndex] * resAllocWeights
- 
-    
-                self.var.wwtSentToResC[wwtResindex] = np.where((sendToRes - resVolumeLeftC) >= 0, resVolumeLeftC, sendToRes)
+                maxIter = 50
+                iterCounter = 0
+                sendToRes = 0
+                while treatedSewer > 1e-10 and np.nansum(resVolumeLeftC) > 1e-10 and iterCounter <= maxIter:
+                    resAllocWeights = divideValues(resVolumeLeftC, npareatotal(resVolumeLeftC, self.var.wwtResIDC > 0)) * (self.var.wwtResIDC > 0)
+                
+                    # Do not allow all reservoir to be zero - split wastewater proportionally to total storage
+                    if np.nansum(resAllocWeights) == 0:
+                        resAllocWeights = divideValues(resVolumeC, npareatotal(resVolumeC, self.var.wwtResIDC > 0)) * (self.var.wwtResIDC > 0)
+                        
+                    tmpSendToRes = np.minimum(treatedSewer * resAllocWeights, resVolumeLeftC)
+                    sendToRes += tmpSendToRes
+                    resVolumeLeftC -= tmpSendToRes
+                    treatedSewer -= np.nansum(tmpSendToRes)
+                    iterCounter +=1
+                ###
+                
+                
+                self.var.wwtSentToResC[wwtResindex] = sendToRes
                 # split water and calcualte overflow in reservoirs - continute here ! error! - something doesnot work with res overflow - it is not written to the layer
                 # see lines 286 -295 for clues
 
                 # below it was originaly assignes (=); I suspect it overwritten
-                self.var.wwtSewerResOverflowC[wwtResindex] = sendToRes - self.var.wwtSentToResC[wwtResindex]
-                
-                
-                #self.var.wwtSewerResOverflowC[wwtResindex] = np.where(self.var.wwtSewerResOverflowC[wwtResindex] < 0, resVolumeLeftC, self.var.wwtSewerResOverflowC[wwtResindex])
-                #self.var.wwtSentToResC[wwtResindex] -= self.var.wwtSewerResOverflowC[wwtResindex]
-                  
+                self.var.wwtSewerResOverflowC[idIndex] = self.var.wwtSewerTreatedC[idIndex] - np.nansum(sendToRes)
+
                 # update overflow
                     
-                overflow_temp += overflowMask * np.nansum(self.var.wwtSewerResOverflowC[wwtResindex])
+                overflow_temp += overflowMask * np.nansum(self.var.wwtSewerResOverflowC[idIndex])
       
                 wwtSentToRes = np.where(np.in1d(np.compress(self.var.compress_LR, self.var.waterBodyOut), self.var.wwtResIDC), self.var.wwtSentToResC, 0.)
                 addToSend = globals.inZero.copy()
@@ -620,7 +622,8 @@ class waterdemand_wastewater(object):
         np.put(self.var.wwtSewerTreated, self.var.decompress_WWT, self.var.wwtSewerTreatedC)     
         np.put(self.var.wwtSewerToTreatment, self.var.decompress_WWT, self.var.wwtSewerToTreatmentC)
         np.put(self.var.wwtSewerOverflow, self.var.decompress_WWT, self.var.wwtSewerOverflowC) 
-        np.put(self.var.wwtSewerResOverflow, self.var.decompress_LR, self.var.wwtSewerResOverflowC)
+        #np.put(self.var.wwtSewerResOverflow, self.var.decompress_LR, self.var.wwtSewerResOverflowC)
+        np.put(self.var.wwtSewerResOverflow, self.var.decompress_WWT, self.var.wwtSewerResOverflowC)
         np.put(self.var.wwtTreatedOverflow, self.var.decompress_WWT, self.var.wwtTreatedOverflowC)   
         np.put(self.var.wwtEvap, self.var.decompress_WWT, self.var.wwtEvapC)
         np.put(self.var.wwtExportedTreated, self.var.decompress_WWT, self.var.wwtExportedTreatedC)

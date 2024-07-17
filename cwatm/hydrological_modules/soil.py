@@ -217,6 +217,7 @@ class soil(object):
         
         # create empty variable for actual recharge
         self.var.sum_gwRecharge_actualM = globals.inZero.copy()
+        self.var.sum_gwRechargeExported = globals.inZero.copy()
         #self.var.sum_gwRecharge_adjusted = globals.inZero.copy()
 # --------------------------------------------------------------------------
 # --------------------------------------------------------------------------
@@ -756,14 +757,13 @@ class soil(object):
                 We also reduce discrepancy by limiting allowed recharge with permeability of the top layer
             '''            
             
-            lc_rechargeShare = divideValues(self.var.gwRecharge[No], self.var.sum_gwRecharge)
+            #lc_rechargeShare = divideValues(self.var.gwRecharge[No], self.var.sum_gwRecharge)
             # correct interflow - rejected recharge added to interflow - maybe it is better to split it between landcovers
-            rejected_recharge = np.maximum(self.var.sum_gwRecharge - self.var.sum_gwRecharge_actualM, 0.) * lc_rechargeShare
-
+            #rejected_recharge = np.maximum(self.var.sum_gwRecharge - self.var.sum_gwRecharge_actualM - self.var.sum_gwRechargeExported, 0.) * lc_rechargeShare
             self.var.gwRecharge[No] = np.minimum(self.var.permeability_v, toGWorInterflow)  
 
             self.var.interflow[No] = toGWorInterflow - self.var.gwRecharge[No]
-            self.var.interflow[No] += rejected_recharge
+            #self.var.interflow[No] += rejected_recharge
         else:
             self.var.interflow[No] = self.var.percolationImp * toGWorInterflow
             self.var.gwRecharge[No] = (1 - self.var.percolationImp) * toGWorInterflow - self.var.capRiseFromGW[No]

@@ -749,9 +749,10 @@ class lakes_reservoirs(object):
                                                     self.var.reservoirStorageM3C)
             self.var.resEvapWaterBodyC = np.where(reservoirStorageM3C_type4Res - self.var.evapWaterBodyC > 0.,
                                                   self.var.evapWaterBodyC, reservoirStorageM3C_type4Res)
+            
             self.var.sumResEvapWaterBodyC += self.var.resEvapWaterBodyC
-            self.var.reservoirStorageM3C = self.var.reservoirStorageM3C - self.var.resEvapWaterBodyC
-
+            self.var.reservoirStorageM3C -= self.var.resEvapWaterBodyC
+            # comment here - it seems that evaporation occur also when storage is zero!
             self.var.reservoirFillC = self.var.reservoirStorageM3C / self.var.resVolumeC
             # New reservoir fill [-]
 
@@ -855,7 +856,6 @@ class lakes_reservoirs(object):
         # ---------------------------------------------------------------------------------------------
         # ---------------------------------------------------------------------------------------------
         # lake and reservoirs
-
         if checkOption('calcWaterBalance'):
             prereslake = self.var.lakeResStorageC.copy()
             prelake = self.var.lakeStorageC.copy()
@@ -892,6 +892,7 @@ class lakes_reservoirs(object):
         inflowC = np.compress(self.var.compress_LR, inflow)
 
         # ------------------------------------------------------------
+        self.var.resEvapWaterBodyC = globals.inZero.copy()
         outflowLakesC = dynamic_inloop_lakes(inflowC, NoRoutingExecuted)
         outflowResC = dynamic_inloop_reservoirs(inflowC, NoRoutingExecuted)
         outflow0C = inflowC.copy()  # no retention

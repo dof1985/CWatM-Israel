@@ -279,7 +279,8 @@ class groundwater_modflow:
         # ModFlow6 version is only daily currently
         self.var.modflow_timestep = 1  #int(loadmap('modflow_timestep'))
         self.var.Ndays_steady = 0  #int(loadmap('Ndays_steady'))
-
+        
+        self.var.sum_gwRechargeExported = globals.inZero.copy()
         # test if ModFlow coupling is used as defined in settings file
         self.var.modflow = False
         if 'modflow_coupling' in option:
@@ -850,6 +851,27 @@ class groundwater_modflow:
         self.var.perc3toGW_GW = divideValues(self.var.sum_perc3toGW,
                                             self.var.sum_prefFlow + self.var.sum_perc3toGW) * self.var.sum_gwRecharge_actualM
         
+        # update interflow an add rejected_recharge
+        rejected_recharge = np.maximum(self.var.sum_gwRecharge - self.var.sum_gwRecharge_actualM - self.var.sum_gwRechargeExported, 0.)
+        
+        # share of landcover specific rejected runoff
+        lc_rechargeShare = divideArrays(self.var.gwRecharge, self.var.sum_gwRecharge) * self.var.fracVegCover
+        # update landcover specific interflow
+        self.var.interflow += divideArrays(lc_rechargeShare * rejected_recharge, self.var.fracVegCover)
+        #update collective gridcell interflow
+        self.var.sum_interflow += np.nansum(lc_rechargeShare * rejected_recharge, axis = 0)
+        
+        # calculate rejected recharge that was not returned to interflow (i.e., from bed exchange - should be sent to runoff)
+        self.var.bedExchangeLeakToRunoff = rejected_recharge - np.nansum(lc_rechargeShare * rejected_recharge, axis = 0)
+        self.var.sum_runoff += self.var.bedExchangeLeakToRunoff 
+
+        #print(lc_rechargeShare0 + lc_rechargeShare1 + lc_rechargeShare2 + lc_rechargeShare3)
+            # correct interflow - rejected recharge added to interflow - maybe it is better to split it between landcovers
+            #rejected_recharge = np.maximum(self.var.sum_gwRecharge - self.var.sum_gwRecharge_actualM - self.var.sum_gwRechargeExported, 0.) * lc_rechargeShare
+            #self.var.gwRecharge[No] = np.minimum(self.var.permeability_v, toGWorInterflow)  
+
+        #print(divideArrays(self.var.interflow,  self.var.sum_interflow))
+            #self.var.interflow[No] += rejected_recharge
         ## INSTALLING WELLS
         if self.var.GW_pumping:
             ## Groundwater demand from CWatM installs wells in each Modflow cell
@@ -866,6 +888,7 @@ class groundwater_modflow:
             # groundwater_abstraction2 allowed only from valid cells
             wellsMask = (np.nansum(self.wells_mask, axis = 0) > 0)
             groundwater_abstraction2 = np.array([groundwater_abstraction  * wellsMask] * nlay_dyn) 
+            #print(np.nansum(groundwater_abstraction))
             
             # self.modflowGroupByCWATM(self.groundwater_storage_available) -> check if can be fixed
             self.gwAvail_weights = np.minimum(divideArrays(self.groundwater_storage_available, self.CWATM2modflow(decompress(self.var.groundwater_storage_available))), 1.0)
@@ -898,6 +921,7 @@ class groundwater_modflow:
             proportional_groundwater_storage = StorageInAbstractionCells / np.nansum(StorageInAbstractionCells, axis = 0)
             proportional_groundwater_storage = np.where(np.isnan(proportional_groundwater_storage), 0, proportional_groundwater_storage)
             groundwater_abstraction2 = groundwater_abstraction2 * proportional_groundwater_storage
+            
             # update  groundwaster abstraction layers
             # give the information to ModFlow
 
@@ -982,6 +1006,7 @@ class groundwater_modflow:
                 actual_pumping_modflow_array[lyr, :, :] = np.bincount(wells_index, weights=wghts,
                                            minlength=int(self.modflow.nrow * self.modflow.ncol)).reshape((self.modflow.nrow, self.modflow.ncol))
             self.var.modfPumpingM_actual = -compressArray(self.modflow2CWATM(np.nansum(actual_pumping_modflow_array, axis = 0)) / (domain['rowsize'] * domain['colsize']))
+            #print(np.nansum(self.var.modfPumpingM_actual * self.var.cellArea))
             #print(np.nansum(actual_pumping_modflow_array))
             #print(np.nansum(self.var.modfPumpingM_actual * self.var.cellArea))
 

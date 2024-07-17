@@ -447,6 +447,7 @@ class routing_kinematic(object):
         self.var.sumsideflow = 0
         self.var.prechannelStorage = self.var.channelAlpha * self.var.chanLength * self.var.discharge ** self.var.beta
         avgDis = 0
+        self.var.sumEvapWaterBodyC = 0
 
         for subrouting in range(self.var.noRoutingSteps):
 
@@ -482,11 +483,9 @@ class routing_kinematic(object):
             else:
                lib2.kinematic(self.var.discharge, sideflowChan, self.var.dirDown, self.var.dirupLen, self.var.dirupID, Qnew, self.var.channelAlpha, self.var.beta, self.var.dtRouting, self.var.chanLength, self.var.lendirDown)
             self.var.discharge = Qnew.copy()
-
+            
             self.var.sumsideflow = self.var.sumsideflow + sideflowChanM3
             avgDis = avgDis  + self.var.discharge / self.var.noRoutingSteps
-
-        # -- end substeping ---------------------
 
         if checkOption('includeWaterBodies'):
             # if there is a lake no discharge is calculated in the routing routine.
@@ -501,7 +500,7 @@ class routing_kinematic(object):
         # discharge only at the outlets to sea or endorheic lakes, otherwise value is 0.
         # as avarge discharge over timestep e.g. 1 day
         self.var.dis_outlet = np.where(self.var.lddCompress == 5, avgDis, 0.)
-
+        
         if checkOption('inflow'):
              self.var.QInM3Old = self.var.inflowM3.copy()
 

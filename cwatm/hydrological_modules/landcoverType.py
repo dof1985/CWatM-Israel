@@ -843,6 +843,7 @@ class landcoverType(object):
                         # Converting the lake/reservoir leakage from meter to cubic meter and put this value in the cell corresponding to the outlet
                         self.var.lakebedExchangeM[discharge_point] = np.sum(np.where(self.var.waterBodyID == lakeIDbyID[id],
                                                                                                             lakebedExchangeM_temp * self.var.cellArea, 0))  # in m3
+              
                     self.var.lakebedExchangeM = self.var.lakebedExchangeM / self.var.MtoM3  # in meter
 
                     # compressed version for lakes and reservoirs
@@ -855,6 +856,7 @@ class landcoverType(object):
 
                     # and from the combined one for waterbalance issues
                     self.var.lakeResStorageC = self.var.lakeResStorageC - lakeExchangeM * self.var.MtoM3C
+                   
                     self.var.lakeResStorage = globals.inZero.copy()
                     np.put(self.var.lakeResStorage, self.var.decompress_LR, self.var.lakeResStorageC)
 
