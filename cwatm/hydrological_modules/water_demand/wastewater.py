@@ -286,13 +286,14 @@ class waterdemand_wastewater(object):
             i = np.in1d(self.var.wwtIdsOrdered, wwtid)
             self.var.wwtVolC.append(self.var.wwt_def[wwtid][int(annual_wwtpIdx[i])][2])
             self.var.wwtTimeC.append(self.var.wwt_def[wwtid][int(annual_wwtpIdx[i])][3]) 
-            self.var.minHRTC.append(np.maximum(self.var.wwt_def[wwtid][int(annual_wwtpIdx[i])][8], 0.001))
+            self.var.minHRTC.append(np.maximum(np.nan_to_num(self.var.wwt_def[wwtid][int(annual_wwtpIdx[i])][8], nan = -999), 0.001)) # default value  = below; minimum value = 0.001
+            self.var.minHRTC = np.where(self.var.minHRTC == -999, self.var.wwtTimeC, self.var.minHRTC) # default value  = set to treatment time
             # if no management data - assume 0 -> try to send to reservoir, and discharge if no free volume
             mng = self.var.wwt_def[wwtid][int(annual_wwtpIdx[i])][5]
             self.var.toResManageC.append(float(np.where(np.isnan(mng), 0., mng)))
             # sector collection masks
-            self.var.maskDomesticCollection = np.where(self.var.wwtColArea == wwtid, self.var.wwt_def[wwtid][int(annual_wwtpIdx[i])][6], self.var.maskDomesticCollection)
-            self.var.maskIndustryCollection = np.where(self.var.wwtColArea == wwtid, self.var.wwt_def[wwtid][int(annual_wwtpIdx[i])][7], self.var.maskIndustryCollection)
+            self.var.maskDomesticCollection = np.where(self.var.wwtColArea == wwtid, np.nan_to_num(self.var.wwt_def[wwtid][int(annual_wwtpIdx[i])][6], nan = 1.0), self.var.maskDomesticCollection) # default value  = 1.0
+            self.var.maskIndustryCollection = np.where(self.var.wwtColArea == wwtid, np.nan_to_num(self.var.wwt_def[wwtid][int(annual_wwtpIdx[i])][7], nan = 1.0), self.var.maskIndustryCollection) # default value  = 1.0
            
         self.var.wwtVolC = np.array(self.var.wwtVolC)
         self.var.wwtTimeC = np.array(self.var.wwtTimeC)
@@ -302,17 +303,26 @@ class waterdemand_wastewater(object):
        
         
         ### Extensive WWTP ####
-        # Identify extensive systems - if timeLag >= 5
-        self.var.extensive = self.var.wwtTimeC >= 5
-        # number of days to fill a treatement pool in extensive systems - default no. of pools: 3
-        self.var.noPools_extensive = 3
-        
+        # Identify extensive systems - if timeLag > 1
+        self.var.extensive = self.var.wwtTimeC > 1
+        # number of days to fill a treatement pool in extensive systems - default no. of pools: 2
+        self.var.noPools_extensive = 2
+        if 'poolsExtensive' in binding:
+            self.var.noPools_extensive = globals.inZero.copy() + loadmap('poolsExtensive')
+            
+        self.var.depthExtensive = 1.5
+        if 'pooldepth_extensive' in binding:
+            self.var.depthExtensive = globals.inZero.copy() + loadmap('pooldepth_extensive')
+        self.var.depthIntensive = 6.0
+        if 'pooldepth_intensive' in binding:
+            self.var.depthIntensive = globals.inZero.copy() + loadmap('pooldepth_intensive')
+
         daysToFill_extensive = self.var.wwtTimeC / self.var.noPools_extensive
         # Volume for an extnesive treatement pool in extensive systems
         self.var.poolVolume_extensive = self.var.wwtVolC * daysToFill_extensive
         
         # Calculate surface area of treatment pools for evaporation
-        self.var.wwtSurfaceAreaC = np.where(self.var.extensive, self.var.poolVolume_extensive, self.var.wwtVolC)/ np.where(self.var.wwtIdsOrdered  > 0, 6.0, 1.0)
+        self.var.wwtSurfaceAreaC = np.where(self.var.extensive, self.var.poolVolume_extensive, self.var.wwtVolC)/ np.where(self.var.wwtIdsOrdered  > 0, self.var.depthIntensive, self.var.depthExtensive)
         
         #### Build WWTP Storage ####
         
@@ -434,9 +444,7 @@ class waterdemand_wastewater(object):
             # handle storage 
             if self.var.extensive[idIndex]:
       
-                #print(idIndex)
-                #print("last Storage Ext" + str(np.round(self.var.wwtStorage[idIndex][-1], 0)))
-                # extensive
+
                 # calculate remainStorage in pool 0
                 remainStorage0 = np.maximum(self.var.poolVolume_extensive[idIndex] - self.var.wwtStorage[wwt_id][0], 0.)
                 
@@ -476,17 +484,9 @@ class waterdemand_wastewater(object):
                 cond = self.var.wwtStorage[wwt_id][1:] > 0
       
                 if cond.any():
-                    
                     self.var.extensive_counter[wwt_id][1:] += (cond * 1)
                     self.var.extensive_counter[wwt_id][1:] = np.where(np.logical_not(cond), 0, self.var.extensive_counter[wwt_id][1:])
-                '''
-                Example from Sorek - print for water quality code dev.
-                if idIndex == 2:
-                    print(idIndex)
-                    print(self.var.wwtStorage[idIndex])
-                    print(self.var.extensive_counter[idIndex])
-                    print(self.var.wwtSewerTreatedC[idIndex])
-                '''
+                    
                 self.var.wwtInTreatment[self.var.wwtID == wwt_id] = np.nansum(self.var.wwtStorage[wwt_id])  
             else:
                 #last storage to TreatedC [m3]         
